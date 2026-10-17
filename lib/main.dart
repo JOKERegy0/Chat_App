@@ -40,7 +40,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void connectToServer() async {
     try {
       // الاتصال بالسيرفر المحلي (10.0.2.2 للمحاكي، أو آي بي الكمبيوتر لو على موبايل حقيقي)
-      socket = await Socket.connect('10.0.2.2', 3000);
+      socket = await Socket.connect('192.168.1.5', 3000);
       setState(() {
         messages.add('تم الاتصال بالسيرفر المحلي بنجاح!');
       });
