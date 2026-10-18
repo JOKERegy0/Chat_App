@@ -1,27 +1,27 @@
-const net = require('net');
-const clients = [];
+const WebSocket = require('ws');
 
-const server = net.createServer((socket) => {
-  console.log('تم اتصال جهاز جديد محلياً!');
-  clients.push(socket);
+const PORT = process.env.PORT || 3000;
+const wss = new WebSocket.Server({ port: PORT });
 
-  socket.on('data', (data) => {
-    console.log('رسالة مستلمة: ' + data);
-    // إرسال الرسالة لكل الأجهزة التانية المتصلة
-    clients.forEach((client) => {
-      if (client !== socket) {
-        client.write(data);
-      }
+console.log('اليسرفر شغال ونافل للرسائل علي البورت ${PORT}');
+
+wss.on('connection', (ws) => {
+    console.log('تن اتصال جهاز جديد بالسيرفر!');
+
+    ws.on('message', (message) => {
+        console.log('رسالة مستلمة: ' + message);
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(message.toString());
+            }
+        });
     });
-  });
 
-  socket.on('end', () => {
-    console.log('انقطع اتصال أحد الأجهزة');
-    const index = clients.indexOf(socket);
-    if (index !== -1) clients.splice(index, 1);
-  });
+    ws.on('error', (err) => {
+        console.log('(تم تجنب الايقاف) خطا في الاتصال:', err.message);
+    });
+
+ws.on('close', () => {
+  console.log('انقطع اتصال احد الاجهزة');
 });
-
-server.listen(3000, () => {
-  console.log('السيرفر المحلي شغال 100% بدون إنترنت على البورت 3000!');
 });
