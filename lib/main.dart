@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
   runApp(const ChatApp());
@@ -35,45 +36,41 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     connectToServer();
-  }
 
-  void connectToServer() async {
-    try {
-      // الاتصال بالسيرفر المحلي (10.0.2.2 للمحاكي، أو آي بي الكمبيوتر لو على موبايل حقيقي)
-      socket = await Socket.connect('192.168.1.5', 3000);
-      setState(() {
-        messages.add('تم الاتصال بالسيرفر المحلي بنجاح!');
-      });
+    void connectToServer() {
+  try {
+    final channel = WebSocketChannel.connect(
+      Uri.parse('wss://chat-app-4hax.onrender.com'),
+    );
 
-      socket!.listen((data) {
+    setState(() {
+      messages.add('!تم الاتصال بالسيرفر السحابي بنجاح');
+    });
+
+    channel.stream.listen(
+      (data) {
         setState(() {
-          messages.add('الطرف الآخر: ${utf8.decode(data)}');
+          messages.add('الطرف الآخر: $data');
         });
-      }, onError: (error) {
+      },
+      onError: (error) {
         setState(() {
           messages.add('خطأ في الاتصال: $error');
         });
-      }, onDone: () {
+      },
+      onDone: () {
         setState(() {
           messages.add('انقطع الاتصال بالسيرفر');
         });
-      });
-    } catch (e) {
-      setState(() {
-        messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
-      });
-    }
+      },
+    );
+  } catch (e) {
+    setState(() {
+      messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
+    });
   }
+}
 
-  void sendMessage() {
-    if (messageController.text.isNotEmpty && socket != null) {
-      socket!.write(messageController.text);
-      setState(() {
-        messages.add('أنا: ${messageController.text}');
-      });
-      messageController.clear();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
