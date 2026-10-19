@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
   runApp(const ChatApp());
@@ -27,10 +25,10 @@ class ChatScreen extends StatefulWidget {
   _ChatScreenState createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen > {
+class _ChatScreenState extends State<ChatScreen> {
   List<String> messages = [];
   final TextEditingController messageController = TextEditingController();
-  late WebSocketChannel channel;
+  WebSocket? channel;
 
   @override
   void initState() {
@@ -38,34 +36,37 @@ class _ChatScreenState extends State<ChatScreen > {
     connectToServer();
   }
 
-  void connectToServer() {
+  Future<void> connectToServer() async {
     try {
-      channel = WebSocketChannel.connect(
-        Uri.parse('wss://chat-app-4hax.onrender.com'),
-      );
+      channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
 
+      if (!mounted) return;
       setState(() {
         messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
       });
 
-      channel.stream.listen(
+      channel!.listen(
         (data) {
+          if (!mounted) return;
           setState(() {
             messages.add('الطرف الآخر: $data');
           });
         },
         onError: (error) {
+          if (!mounted) return;
           setState(() {
             messages.add('خطأ في الاتصال: $error');
           });
         },
         onDone: () {
+          if (!mounted) return;
           setState(() {
             messages.add('انقطع الاتصال بالسيرفر');
           });
         },
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
       });
@@ -73,18 +74,19 @@ class _ChatScreenState extends State<ChatScreen > {
   }
 
   void sendMessage() {
-    if (messageController.text.isNotEmpty) {
-      channel.sink.add(messageController.text);
-      setState(() {
-        messages.add('أنا: ${messageController.text}');
-      });
-      messageController.clear();
-    }
+    final text = messageController.text.trim();
+    if (text.isEmpty || channel == null) return;
+
+    channel!.add(text);
+    setState(() {
+      messages.add('أنا: $text');
+    });
+    messageController.clear();
   }
 
   @override
   void dispose() {
-    channel.sink.close();
+    channel?.close();
     messageController.dispose();
     super.dispose();
   }
@@ -131,4 +133,3 @@ class _ChatScreenState extends State<ChatScreen > {
     );
   }
 }
-
