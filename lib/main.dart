@@ -14,7 +14,7 @@ class ChatApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Offline Chat',
+      title: 'Cloud Chat',
       home: const ChatScreen(),
     );
   }
@@ -27,66 +27,82 @@ class ChatScreen extends StatefulWidget {
   _ChatScreenState createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  Socket? socket;
+class _ChatScreenState extends State<ChatScreen > {
   List<String> messages = [];
   final TextEditingController messageController = TextEditingController();
+  late WebSocketChannel channel;
 
   @override
   void initState() {
     super.initState();
     connectToServer();
-
-    void connectToServer() {
-  try {
-    final channel = WebSocketChannel.connect(
-      Uri.parse('wss://chat-app-4hax.onrender.com'),
-    );
-
-    setState(() {
-      messages.add('!تم الاتصال بالسيرفر السحابي بنجاح');
-    });
-
-    channel.stream.listen(
-      (data) {
-        setState(() {
-          messages.add('الطرف الآخر: $data');
-        });
-      },
-      onError: (error) {
-        setState(() {
-          messages.add('خطأ في الاتصال: $error');
-        });
-      },
-      onDone: () {
-        setState(() {
-          messages.add('انقطع الاتصال بالسيرفر');
-        });
-      },
-    );
-  } catch (e) {
-    setState(() {
-      messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
-    });
   }
-}
 
+  void connectToServer() {
+    try {
+      channel = WebSocketChannel.connect(
+        Uri.parse('wss://chat-app-4hax.onrender.com'),
+      );
+
+      setState(() {
+        messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
+      });
+
+      channel.stream.listen(
+        (data) {
+          setState(() {
+            messages.add('الطرف الآخر: $data');
+          });
+        },
+        onError: (error) {
+          setState(() {
+            messages.add('خطأ في الاتصال: $error');
+          });
+        },
+        onDone: () {
+          setState(() {
+            messages.add('انقطع الاتصال بالسيرفر');
+          });
+        },
+      );
+    } catch (e) {
+      setState(() {
+        messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
+      });
+    }
+  }
+
+  void sendMessage() {
+    if (messageController.text.isNotEmpty) {
+      channel.sink.add(messageController.text);
+      setState(() {
+        messages.add('أنا: ${messageController.text}');
+      });
+      messageController.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    channel.sink.close();
+    messageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('شات محلي أوفلاين')),
+      appBar: AppBar(
+        title: const Text('شات سحابي مباشر'),
+      ),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               itemCount: messages.length,
               itemBuilder: (context, index) {
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  child: ListTile(
-                    title: Text(messages[index]),
-                  ),
+                return ListTile(
+                  title: Text(messages[index]),
                 );
               },
             ),
@@ -99,14 +115,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: TextField(
                     controller: messageController,
                     decoration: const InputDecoration(
-                      hintText: 'اكتب رسالتك...',
-                      border: OutlineInputBorder(),
+                      hintText: 'اكتب رسالة...',
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
+                  icon: const Icon(Icons.send),
                   onPressed: sendMessage,
                 ),
               ],
@@ -117,3 +131,4 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
