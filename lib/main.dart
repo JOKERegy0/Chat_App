@@ -35,43 +35,67 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     connectToServer();
   }
+   bool isConnecting = false;
 
   Future<void> connectToServer() async {
-    try {
-      channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
+  if (isConnecting) return;
+  isConnecting = true;
 
-      if (!mounted) return;
-      setState(() {
-        messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
-      });
+  if (!mounted) return;
+  setState(() {
+    messages.add('جاري الاتصال بالسيرفر...');
+  });
 
-      channel!.listen(
-        (data) {
-          if (!mounted) return;
-          setState(() {
-            messages.add('الطرف الآخر: $data');
-          });
-        },
-        onError: (error) {
-          if (!mounted) return;
-          setState(() {
-            messages.add('خطأ في الاتصال: $error');
-          });
-        },
-        onDone: () {
-          if (!mounted) return;
-          setState(() {
-            messages.add('انقطع الاتصال بالسيرفر');
-          });
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        messages.add('فشل الاتصال بالسيرفر: تأكد أن السيرفر يعمل');
-      });
-    }
+  try {
+    channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
+    
+    if (!mounted) return;
+    setState(() {
+      messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
+      isConnecting = false;
+    });
+
+    channel!.listen(
+      (data) {
+        if (!mounted) return;
+        setState(() {
+          messages.add('الطرف الآخر: $data');
+        });
+      },
+      onError: (error) {
+        if (!mounted) return;
+        setState(() {
+          messages.add('خطأ في الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
+        });
+        _scheduleReconnect();
+      },
+      onDone: () {
+        if (!mounted) return;
+        setState(() {
+          messages.add('انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
+        });
+        _scheduleReconnect();
+      },
+    );
+  } catch (e) {
+    if (!mounted) return;
+    setState(() {
+      messages.add('فشل الاتصال (تحقق من الإنترنت أو السيرفر)، جاري إعادة المحاولة...');
+    });
+    isConnecting = false;
+    _scheduleReconnect();
   }
+}
+
+// دالة إعادة المحاولة تلقائياً
+void _scheduleReconnect() {
+  Future.delayed(const Duration(seconds: 5), () {
+    if (mounted) {
+      connectToServer();
+    }
+  });
+}
+
 
   void sendMessage() {
     final text = messageController.text.trim();
