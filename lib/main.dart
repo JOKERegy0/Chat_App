@@ -37,10 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
    bool isConnecting = false;
 
-  Future<void> connectToServer() async {
-  if (isConnecting) return;
-  isConnecting = true;
-
+Future<void> connectToServer() async {
   if (!mounted) return;
   setState(() {
     messages.add('جاري الاتصال بالسيرفر...');
@@ -51,8 +48,7 @@ class _ChatScreenState extends State<ChatScreen> {
     
     if (!mounted) return;
     setState(() {
-      messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
-      isConnecting = false;
+      messages.add('تم الاتصال بالسيرفر بنجاح!');
     });
 
     channel!.listen(
@@ -65,35 +61,22 @@ class _ChatScreenState extends State<ChatScreen> {
       onError: (error) {
         if (!mounted) return;
         setState(() {
-          messages.add('خطأ في الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
+          messages.add('خطأ في الاتصال');
         });
-        _scheduleReconnect();
       },
       onDone: () {
         if (!mounted) return;
         setState(() {
-          messages.add('انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
+          messages.add('انقطع الاتصال بالسيرفر');
         });
-        _scheduleReconnect();
       },
     );
   } catch (e) {
     if (!mounted) return;
     setState(() {
-      messages.add('فشل الاتصال (تحقق من الإنترنت أو السيرفر)، جاري إعادة المحاولة...');
+      messages.add('فشل الاتصال بالسيرفر، تأكد أن السيرفر يعمل');
     });
-    isConnecting = false;
-    _scheduleReconnect();
   }
-}
-
-// دالة إعادة المحاولة تلقائياً
-void _scheduleReconnect() {
-  Future.delayed(const Duration(seconds: 5), () {
-    if (mounted) {
-      connectToServer();
-    }
-  });
 }
 
 
