@@ -30,16 +30,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController messageController = TextEditingController();
   WebSocket? channel;
 
-   @override
+    bool isConnecting = false;
+
+  @override
   void initState() {
     super.initState();
-    // الانتظار لحين اكتمال بناء الواجهة تماماً قبل بدء الاتصال لمنع الانهيار
+    // حماية التطبيق من الانهيار والانتظار حتى اكتمال بناء الواجهة تماماً
     WidgetsBinding.instance.addPostFrameCallback((_) {
       connectToServer();
     });
   }
-
-  bool isConnecting = false;
 
   Future<void> connectToServer() async {
     if (isConnecting) return;
@@ -55,7 +55,7 @@ class _ChatScreenState extends State<ChatScreen> {
       
       if (!mounted) return;
       setState(() {
-        messages.add('تم الاتصال بالسيرفر بنجاح!');
+        messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
         isConnecting = false;
       });
 
@@ -69,27 +69,38 @@ class _ChatScreenState extends State<ChatScreen> {
         onError: (error) {
           if (!mounted) return;
           setState(() {
-            messages.add('خطأ في الاتصال');
+            messages.add('خطأ في الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
             isConnecting = false;
           });
+          _scheduleReconnect();
         },
         onDone: () {
           if (!mounted) return;
           setState(() {
-            messages.add('انقطع الاتصال بالسيرفر');
+            messages.add('انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
             isConnecting = false;
           });
+          _scheduleReconnect();
         },
       );
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        messages.add('فشل الاتصال بالسيرفر، تأكد أن السيرفر يعمل');
+        messages.add('فشل الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
         isConnecting = false;
       });
+      _scheduleReconnect();
     }
   }
- 
+
+  // دالة إعادة الاتصال التلقائي بشكل آمن
+  void _scheduleReconnect() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        connectToServer();
+      }
+    });
+  }
 
 
   void sendMessage() {
