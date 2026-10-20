@@ -30,54 +30,66 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController messageController = TextEditingController();
   WebSocket? channel;
 
-  @override
+   @override
   void initState() {
     super.initState();
-    connectToServer();
-  }
-   bool isConnecting = false;
-
-Future<void> connectToServer() async {
-  if (!mounted) return;
-  setState(() {
-    messages.add('جاري الاتصال بالسيرفر...');
-  });
-
-  try {
-    channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
-    
-    if (!mounted) return;
-    setState(() {
-      messages.add('تم الاتصال بالسيرفر بنجاح!');
-    });
-
-    channel!.listen(
-      (data) {
-        if (!mounted) return;
-        setState(() {
-          messages.add('الطرف الآخر: $data');
-        });
-      },
-      onError: (error) {
-        if (!mounted) return;
-        setState(() {
-          messages.add('خطأ في الاتصال');
-        });
-      },
-      onDone: () {
-        if (!mounted) return;
-        setState(() {
-          messages.add('انقطع الاتصال بالسيرفر');
-        });
-      },
-    );
-  } catch (e) {
-    if (!mounted) return;
-    setState(() {
-      messages.add('فشل الاتصال بالسيرفر، تأكد أن السيرفر يعمل');
+    // الانتظار لحين اكتمال بناء الواجهة تماماً قبل بدء الاتصال لمنع الانهيار
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      connectToServer();
     });
   }
-}
+
+  bool isConnecting = false;
+
+  Future<void> connectToServer() async {
+    if (isConnecting) return;
+    isConnecting = true;
+
+    if (!mounted) return;
+    setState(() {
+      messages.add('جاري الاتصال بالسيرفر...');
+    });
+
+    try {
+      channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
+      
+      if (!mounted) return;
+      setState(() {
+        messages.add('تم الاتصال بالسيرفر بنجاح!');
+        isConnecting = false;
+      });
+
+      channel!.listen(
+        (data) {
+          if (!mounted) return;
+          setState(() {
+            messages.add('الطرف الآخر: $data');
+          });
+        },
+        onError: (error) {
+          if (!mounted) return;
+          setState(() {
+            messages.add('خطأ في الاتصال');
+            isConnecting = false;
+          });
+        },
+        onDone: () {
+          if (!mounted) return;
+          setState(() {
+            messages.add('انقطع الاتصال بالسيرفر');
+            isConnecting = false;
+          });
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        messages.add('فشل الاتصال بالسيرفر، تأكد أن السيرفر يعمل');
+        isConnecting = false;
+      });
+    }
+  }
+ 
 
 
   void sendMessage() {
