@@ -1,7 +1,6 @@
-package com.limited.chat_app
+package com.exampel
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity: FlutterActivity() {
 }
-
