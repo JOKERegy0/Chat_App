@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized(); // السطر ده هو اللي بيمنع انهيار التطبيق عند الفتح
   runApp(const ChatApp());
 }
+
 
 class ChatApp extends StatelessWidget {
   const ChatApp({Key? key}) : super(key: key);
