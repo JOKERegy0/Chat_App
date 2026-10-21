@@ -13,7 +13,7 @@ class ChatApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Joker Chat',
+      title: 'Joker Chat Pro',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
       home: const ChatScreen(),
     );
@@ -36,7 +36,6 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // الانتظار لحين اكتمال بناء الواجهة تماماً قبل بدء الاتصال لمنع الانهيار
     WidgetsBinding.instance.addPostFrameCallback((_) {
       connectToServer();
     });
@@ -70,25 +69,37 @@ class _ChatScreenState extends State<ChatScreen> {
         onError: (error) {
           if (!mounted) return;
           setState(() {
-            messages.add('خطأ في الاتصال بالسيرفر');
+            messages.add('خطأ في الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
             isConnecting = false;
           });
+          _scheduleReconnect();
         },
         onDone: () {
           if (!mounted) return;
           setState(() {
-            messages.add('انقطع الاتصال بالسيرفر');
+            messages.add('انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
             isConnecting = false;
           });
+          _scheduleReconnect();
         },
       );
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        messages.add('فشل الاتصال بالسيرفر، تأكد من الإنترنت');
+        messages.add('فشل الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
         isConnecting = false;
       });
+      _scheduleReconnect();
     }
+  }
+
+  // دالة إعادة الاتصال التلقائي بذكاء
+  void _scheduleReconnect() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        connectToServer();
+      }
+    });
   }
 
   void sendMessage() {
@@ -119,7 +130,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Joker Chat - Pro'),
+        title: const Text('Joker Chat - Pro Smart'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Column(
@@ -171,5 +182,4 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
 
