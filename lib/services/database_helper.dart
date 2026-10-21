@@ -56,4 +56,41 @@ class DatabaseHelper {
     final db = await instance.database;
     db.close();
   }
+    // ==================== دوال الرسائل (Messages) ====================
+
+  // 1. حفظ رسالة جديدة
+  Future<int> insertMessage(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+    return await db.insert('messages', row);
+  }
+
+  // 2. جلب كل الرسائل الخاصة بمحادثات معينة مرقبة بالوقت
+  Future<List<Map<String, dynamic>>> getMessages(String chatId) async {
+    Database db = await instance.database;
+    return await db.query(
+      'messages',
+      where: 'chat_id = ?',
+      whereArgs: [chatId],
+      orderBy: 'timestamp ASC',
+    );
+  }
+
+  // ==================== دوال المحادثات (Chats) ====================
+
+  // 3. إضافة أو تحديث محادثة
+  Future<int> insertOrUpdateChat(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+    return await db.insert(
+      'chats',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // 4. جلب قائمة كل المحادثات
+  Future<List<Map<String, dynamic>>> getChats() async {
+    Database db = await instance.database;
+    return await db.query('chats', orderBy: 'updated_at DESC');
+  }
+
 }
