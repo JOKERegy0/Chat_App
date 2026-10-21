@@ -1,4 +1,4 @@
-package com.exampel
+package com.kiura
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -13,7 +13,7 @@ class ChatApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Joker Chat Pro',
+      title: 'KIURA',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
       home: const ChatScreen(),
     );
@@ -52,7 +52,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
-      
+
       if (!mounted) return;
       setState(() {
         messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
@@ -93,7 +93,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // دالة إعادة الاتصال التلقائي بذكاء
   void _scheduleReconnect() {
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
@@ -130,7 +129,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Joker Chat - Pro Smart'),
+        title: const Text('KIURA'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Column(
@@ -182,4 +181,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
