@@ -34,7 +34,6 @@ class DatabaseHelper {
       version: 2,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
-        // تحديث الجداول لو تغيرت النسخة
         if (oldVersion < 2) {
           await db.execute('DROP TABLE IF EXISTS messages');
           await db.execute('DROP TABLE IF EXISTS chats');
@@ -74,7 +73,6 @@ class DatabaseHelper {
     return await db.insert('messages', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  // تحديث حالة الرسالة (مثلاً من pending إلى sent أو delivered)
   Future<void> updateMessageStatus(String messageId, String newStatus) async {
     Database db = await instance.database;
     await db.update(
@@ -85,7 +83,6 @@ class DatabaseHelper {
     );
   }
 
-  // جلب الرسائل المعلقة لإرسالها فور عودة الإنترنت
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
     Database db = await instance.database;
     return await db.query(
@@ -101,7 +98,7 @@ class DatabaseHelper {
       'messages',
       where: 'chat_id = ?',
       whereArgs: [chatId],
-      orderBy: 'timestamp DESC', // الأحدث في الأعلى عشان الـ reverse list
+      orderBy: 'timestamp DESC',
     );
   }
 
@@ -130,7 +127,11 @@ class KiuraApp extends StatelessWidget {
         primarySwatch: Colors.indigo,
         useMaterial3: true,
       ),
-      home: const ChatScreen(currentUserId: 'user_joker', recipientId: 'user_friend', chatId: 'chat_joker_friend'),
+      home: const ChatScreen(
+        currentUserId: 'user_joker',
+        recipientId: 'user_friend',
+        chatId: 'chat_joker_friend',
+      ),
     );
   }
 }
@@ -173,7 +174,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // الاتصال بالسيرفر مع مزامنة الرسائل المعلقة تلقائياً
   void _connectWebSocket() async {
     if (_isConnected || _isConnecting) return;
     _isConnecting = true;
@@ -183,77 +183,82 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {}
 
     try {
-      // الاتصال برنده مع إرسال معرف المستخدم في الـ Query لتحديد هوبيته على السيرفر
-      _channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com?user_id=${widget.currentUserId}');
-      
+      _channel = await WebSocket.connect(
+          'wss://chat-app-4hax.onrender.com?user_id=${widget.currentUserId}');
+
       setState(() {
         _isConnected = true;
         _isConnecting = false;
       });
-      
-      _reconnectTimer?.cancel();
 
-      // أول ما نتصل، نقوم بمزامنة الرسائل المعلقة (Offline Sync Engine)
-      _syncPendingMessagesToSever();
+      _reconnectTimer?.cancel();
+      _syncPendingMessagesToServer();
 
       _channel!.listen(
         (message) async {
           try {
             final data = jsonDecode(message);
-            
-            // لو السيرفر بعت إقرار وصول رسالة (Delivery Ack)
+
             if (data['type'] == 'ack') {
-              await DatabaseHelper.instance.updateMessageStatus(data['message_id'], 'delivered');
+              await DatabaseHelper.instance
+                  .updateMessageStatus(data['message_id'], 'delivered');
               _loadLocalMessages();
               return;
             }
 
-            // استقبال رسالة جديدة حية من الطرف الآخر
             final messageData = {
-              'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'id': data['id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               'chat_id': widget.chatId,
               'sender_id': data['sender_id'],
               'recipient_id': widget.currentUserId,
               'content': data['content'],
               'type': 'text',
               'status': 'delivered',
-              'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
+              'timestamp':
+                  data['timestamp'] ?? DateTime.now().toIso8601String(),
             };
 
             await DatabaseHelper.instance.insertMessage(messageData);
             _loadLocalMessages();
 
-            // إرسال إقرار للسيرفر أن الرسالة وصلت وتم قراءتها
             _channel?.add(jsonEncode({
               'type': 'ack',
               'message_id': data['id'],
               'sender_id': data['sender_id']
             }));
-
           } catch (e) {
             print('Incoming message error: $e');
           }
         },
         onDone: () {
-          setState(() { _isConnected = false; _isConnecting = false; });
+          setState(() {
+            _isConnected = false;
+            _isConnecting = false;
+          });
           _startReconnectTimer();
         },
         onError: (error) {
-          setState(() { _isConnected = false; _isConnecting = false; });
+          setState(() {
+            _isConnected = false;
+            _isConnecting = false;
+          });
           _startReconnectTimer();
         },
         cancelOnError: true,
       );
     } catch (e) {
-      setState(() { _isConnected = false; _isConnecting = false; });
+      setState(() {
+        _isConnected = false;
+        _isConnecting = false;
+      });
       _startReconnectTimer();
     }
   }
 
-  // نظام مزامنة الرسائل المعلقة عند عودة الاتصال
-  void _syncPendingMessagesToSever() async {
+  void _syncPendingMessagesToServer() async {
     if (!_isConnected || _channel == null) return;
-    
+
     final pendingMessages = await DatabaseHelper.instance.getPendingMessages();
     for (var msg in pendingMessages) {
       final payload = jsonEncode({
@@ -264,9 +269,8 @@ class _ChatScreenState extends State<ChatScreen> {
         'content': msg['content'],
         'timestamp': msg['timestamp'],
       });
-      
+
       _channel!.add(payload);
-      // تحديث حالتها محلياً إلى مرسلة
       await DatabaseHelper.instance.updateMessageStatus(msg['id'], 'sent');
     }
     _loadLocalMessages();
@@ -291,8 +295,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final messageId = DateTime.now().millisecondsSinceEpoch.toString();
     final timestamp = DateTime.now().toIso8601String();
-    
-    // لو متصل تكون 'sent'، لو أوفلاين تكون 'pending' لتنتظر المزامنة لاحقاً
     final messageStatus = _isConnected ? 'sent' : 'pending';
 
     final messageData = {
@@ -306,10 +308,8 @@ class _ChatScreenState extends State<ChatScreen> {
       'timestamp': timestamp,
     };
 
-    // 1. الحفظ محلياً أولاً لضمان عدم ضياع أي حرف (Local-First Architecture)
     await DatabaseHelper.instance.insertMessage(messageData);
 
-    // 2. تحديث قائمة الشات بأخر رسالة
     await DatabaseHelper.instance.insertOrUpdateChat({
       'id': widget.chatId,
       'name': 'Kiura Friend',
@@ -318,7 +318,6 @@ class _ChatScreenState extends State<ChatScreen> {
       'updated_at': timestamp,
     });
 
-    // 3. الإرسال الفوري للسيرفر لو الإنترنت متاح
     if (_isConnected && _channel != null) {
       final payload = jsonEncode({
         'id': messageId,
@@ -342,17 +341,16 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // رسم علامات الصح الديناميكية (Ticks) بناءً على حالة الرسالة
   Widget _buildMessageStatusIcon(String status) {
     switch (status) {
       case 'pending':
-        return const Icon(Icons.access_time, size: 12, color: Colors.grey); // ⏳ معلقة
+        return const Icon(Icons.access_time, size: 12, color: Colors.grey);
       case 'sent':
-        return const Icon(Icons.check, size: 12, color: Colors.grey); // ✓ مرسلة للسيرفر
+        return const Icon(Icons.check, size: 12, color: Colors.grey);
       case 'delivered':
-        return const Icon(Icons.done_all, size: 12, color: Colors.grey); // ✓✓ وصلت للمستلم
+        return const Icon(Icons.done_all, size: 12, color: Colors.grey);
       case 'read':
-        return const Icon(Icons.done_all, size: 12, color: Colors.blue); // ✓✓ قرأها المستلم
+        return const Icon(Icons.done_all, size: 12, color: Colors.blue);
       default:
         return const Icon(Icons.check, size: 12, color: Colors.grey);
     }
@@ -364,7 +362,8 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('KIURA Chat', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('KIURA Chat',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 12),
             Container(
               width: 12,
@@ -381,24 +380,26 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: ListView.builder(
-              reverse: true, // الترتيب الصحيح: الأحدث في الأسفل
+              reverse: true,
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final isMe = msg['sender_id'] == widget.currentUserId;
-                
-                // استخراج الوقت بشكل أنيق (ساعة ودقيقة)
+
                 String formattedTime = '';
                 try {
                   final dt = DateTime.parse(msg['timestamp']);
-                  formattedTime = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+                  formattedTime =
+                      "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
                 } catch (_) {}
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: isMe ? Colors.indigo[100] : Colors.grey[200],
                       borderRadius: BorderRadius.circular(12),
@@ -406,18 +407,21 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(msg['content'] ?? '', style: const TextStyle(fontSize: 16), textAlign: TextAlign.right),
+                        Text(msg['content'] ?? '',
+                            style: const TextStyle(fontSize: 16),
+                            textAlign: TextAlign.right),
                         const SizedBox(height: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               formattedTime,
-                              style: const TextStyle(fontSize: 10, color: Colors.black54),
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black54),
                             ),
                             if (isMe) ...[
                               const SizedBox(width: 4),
-                              _buildMessageStatusIcon(msg['status']), // علامات الصح الذكية
+                              _buildMessageStatusIcon(msg['status']),
                             ],
                           ],
                         ),
@@ -429,7 +433,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           Container(
-            padding: constضيف الإطار العام للتصميم والمراسلة،
             color: Colors.white,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
@@ -442,7 +445,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: const InputDecoration(
                         hintText: 'اكتب رسالتك في KIURA...',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
