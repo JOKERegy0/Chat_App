@@ -1,7 +1,9 @@
+import 'dart:io';
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:socket_io_client/socket_io_client.io' as IO;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,83 +87,7 @@ class DatabaseHelper {
 }
 
 // ==========================================
-// 2. نظام الاتصال والسيرفر (Socket Service)
-// ==========================================
-class SocketService {
-  static final SocketService instance = SocketService._internal();
-  factory SocketService() => instance;
-  SocketService._internal();
-
-  late IO.Socket socket;
-  bool isConnected = false;
-
-  void initSocket({
-    required String serverUrl,
-    required String userId,
-    required Function(bool) onConnectionChanged,
-    required Function(Map<String, dynamic>) onMessageReceived,
-  }) {
-    socket = IO.io(serverUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'query': {'user_id': userId},
-    });
-
-    socket.connect();
-
-    socket.onConnect((_) {
-      isConnected = true;
-      onConnectionChanged(true);
-      print('KIURA: Connected to Server');
-    });
-
-    socket.onDisconnect((_) {
-      isConnected = false;
-      onConnectionChanged(false);
-      print('KIURA: Disconnected from Server');
-    });
-
-    socket.on('receive_message', (data) async {
-      final messageData = {
-        'id': data['id'],
-        'chat_id': data['chat_id'],
-        'sender_id': data['sender_id'],
-        'content': data['content'],
-        'type': data['type'] ?? 'text',
-        'status': 'delivered',
-        'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
-      };
-
-      await DatabaseHelper.instance.insertMessage(messageData);
-      onMessageReceived(messageData);
-    });
-  }
-
-  void sendMessage({
-    required String chatId,
-    required String recipientId,
-    required String content,
-    required String messageId,
-    required String timestamp,
-  }) {
-    if (isConnected) {
-      socket.emit('send_message', {
-        'id': messageId,
-        'chat_id': chatId,
-        'recipient_id': recipientId,
-        'content': content,
-        'timestamp': timestamp,
-      });
-    }
-  }
-
-  void disconnect() {
-    socket.disconnect();
-  }
-}
-
-// ==========================================
-// 3. واجهة التطبيق الرئيسية (UI)
+// 2. واجهة التطبيق الرئيسية (UI)
 // ==========================================
 class KiuraApp extends StatelessWidget {
   const KiuraApp({Key? key}) : super(key: key);
@@ -190,16 +116,18 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   List<Map<String, dynamic>> _messages = [];
+  WebSocket? _channel;
   bool _isConnected = false;
+  bool _isConnecting = false; // 🛡️ حماية لمنع تكرار فتح قنوات اتصال متعددة
+  Timer? _reconnectTimer;
 
   @override
   void initState() {
     super.initState();
     _loadLocalMessages();
-    _setupSocket();
+    _connectWebSocket();
   }
 
-  // تحميل الرسائل من قاعدة البيانات المحلية أولاً
   void _loadLocalMessages() async {
     final data = await DatabaseHelper.instance.getMessages('default_chat');
     setState(() {
@@ -207,23 +135,89 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // إعداد السوكت والاستماع للتغيرات
-  void _setupSocket() {
-    SocketService.instance.initSocket(
-      serverUrl: 'https://your-server-url.com', // ضع رابط السيرفر الخاص بك هنا لاحقاً
-      userId: 'user_joker',
-      onConnectionChanged: (status) {
-        setState(() {
-          _isConnected = status;
-        });
-      },
-      onMessageReceived: (data) {
-        _loadLocalMessages(); // تحديث الشاشة عند استقبال رسالة حية
-      },
-    );
+  // الاتصال بالسيرفر مع حماية صارمة لمنع تكرار القنوات
+  void _connectWebSocket() async {
+    // لو التطبيق متصل بالفعل، أو في عملية اتصال حالية جارٍ تنفيذها، امنع الطلب فوراً
+    if (_isConnected || _isConnecting) return;
+
+    _isConnecting = true; // تعيين حالة أنه جاري الاتصال الآن
+
+    // تنظيف وإغلاق أي قناة قديمة سابقة للتأكد تماماً من عدم وجود قنوات معلقة
+    try {
+      await _channel?.close();
+    } catch (_) {}
+
+    try {
+      print('KIURA: Trying to connect to server...');
+      _channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
+      
+      setState(() {
+        _isConnected = true;
+        _isConnecting = false; // تم الاتصال بنجاح، فك حالة الانتظار
+      });
+      
+      print('KIURA: Connected successfully (Single active channel).');
+      _reconnectTimer?.cancel(); // إيقاف مؤقت المحاولات
+
+      _channel!.listen(
+        (message) async {
+          try {
+            final data = jsonDecode(message);
+            final messageData = {
+              'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'chat_id': data['chat_id'] ?? 'default_chat',
+              'sender_id': data['sender_id'] ?? 'other',
+              'content': data['content'] ?? message,
+              'type': 'text',
+              'status': 'delivered',
+              'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
+            };
+
+            await DatabaseHelper.instance.insertMessage(messageData);
+            _loadLocalMessages();
+          } catch (e) {
+            print('Received non-JSON message: $message');
+          }
+        },
+        onDone: () {
+          setState(() {
+            _isConnected = false;
+            _isConnecting = false;
+          });
+          _startReconnectTimer();
+        },
+        onError: (error) {
+          setState(() {
+            _isConnected = false;
+            _isConnecting = false;
+          });
+          _startReconnectTimer();
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      setState(() {
+        _isConnected = false;
+        _isConnecting = false; // فشل الاتصال، فك حالة الانتظار للسماح بالمحاولة القادمة
+      });
+      print('WebSocket Connection Error: $e. Retrying in background...');
+      _startReconnectTimer();
+    }
   }
 
-  // إرسال الرسالة وحفظها محلياً وعبر السوكت
+  void _startReconnectTimer() {
+    if (_reconnectTimer?.isActive ?? false) return;
+
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!_isConnected && !_isConnecting) {
+        print('KIURA: Background reconnect attempt (Safe & Controlled)...');
+        _connectWebSocket();
+      } else if (_isConnected) {
+        timer.cancel();
+      }
+    });
+  }
+
   void _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -231,7 +225,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final messageId = DateTime.now().millisecondsSinceEpoch.toString();
     final timestamp = DateTime.now().toIso8601String();
-    final messageStatus = SocketService.instance.isConnected ? 'sent' : 'pending';
+    final messageStatus = _isConnected ? 'sent' : 'pending';
 
     final messageData = {
       'id': messageId,
@@ -243,10 +237,8 @@ class _ChatScreenState extends State<ChatScreen> {
       'timestamp': timestamp,
     };
 
-    // 1. الحفظ محلياً فوراً (Local-First) لضمان عدم ضياعها
     await DatabaseHelper.instance.insertMessage(messageData);
 
-    // 2. تحديث قائمة المحادثات الأخيرة
     await DatabaseHelper.instance.insertOrUpdateChat({
       'id': 'default_chat',
       'name': 'Kiura User',
@@ -255,17 +247,26 @@ class _ChatScreenState extends State<ChatScreen> {
       'updated_at': timestamp,
     });
 
-    // 3. المحاولة عبر السوكت إذا كان متصلاً
-    SocketService.instance.sendMessage(
-      chatId: 'default_chat',
-      recipientId: 'recipient_id',
-      content: text,
-      messageId: messageId,
-      timestamp: timestamp,
-    );
+    if (_isConnected && _channel != null) {
+      final payload = jsonEncode({
+        'id': messageId,
+        'chat_id': 'default_chat',
+        'sender_id': 'me',
+        'content': text,
+        'timestamp': timestamp,
+      });
+      _channel!.add(payload);
+    }
 
-    // 4. تحديث الواجهة
     _loadLocalMessages();
+  }
+
+  @override
+  void dispose() {
+    _reconnectTimer?.cancel();
+    _channel?.close();
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -276,7 +277,6 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             const Text('KIURA Chat', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 12),
-            // مؤشر حالة الاتصال بالسيرفر
             Container(
               width: 12,
               height: 12,
@@ -310,14 +310,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(msg['content'] ?? '', style: const TextStyle(fontSize: 16)),
                         const SizedBox(height: 4),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              msg['status'] == 'pending' ? '⏳ معلقة' : '✓ مرسلة',
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
+                        Text(
+                          msg['status'] == 'pending' ? '⏳ معلقة' : '✓ مرسلة',
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
                         ),
                       ],
                     ),
