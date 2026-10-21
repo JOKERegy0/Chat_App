@@ -1,9 +1,21 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ChatApp());
+  // التقاط الأخطاء غير المتوقعة في الفريم وورك لمنع الكراش
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Captured Flutter Error: ${details.exception}');
+  };
+
+  // التقاط الأخطاء التي تحصل خارج نطاق الـ UI
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    runApp(const ChatApp());
+  }, (error, stackTrace) {
+    debugPrint('Captured Async Error: $error');
+  });
 }
 
 class ChatApp extends StatelessWidget {
@@ -13,8 +25,38 @@ class ChatApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Joker Chat Pro',
+      title: 'Joker Chat',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
+      // حماية الواجهة من الكراش بصفحة أخطاء مخصصة
+      builder: (context, widget) {
+        ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 60),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'حدث خطأ غير متوقع في الواجهة',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      errorDetails.exception.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        };
+        return widget!;
+      },
       home: const ChatScreen(),
     );
   }
@@ -28,7 +70,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final List<String> messages = [];
+  final List<String> logsAndMessages = [];
   final TextEditingController messageController = TextEditingController();
   WebSocket? channel;
   bool isConnecting = false;
@@ -41,59 +83,46 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void log(String text) {
+    if (!mounted) return;
+    setState(() {
+      logsAndMessages.add(text);
+    });
+  }
+
   Future<void> connectToServer() async {
     if (isConnecting) return;
     isConnecting = true;
 
-    if (!mounted) return;
-    setState(() {
-      messages.add('جاري الاتصال بالسيرفر...');
-    });
+    log('⏳ [تسجيل]: جاري محاولة الاتصال بالسيرفر...');
 
     try {
       channel = await WebSocket.connect('wss://chat-app-4hax.onrender.com');
-      
-      if (!mounted) return;
-      setState(() {
-        messages.add('تم الاتصال بالسيرفر السحابي بنجاح!');
-        isConnecting = false;
-      });
+      log('✅ [تسجيل]: تم الاتصال بالسيرفر السحابي بنجاح!');
+      isConnecting = false;
 
       channel!.listen(
         (data) {
-          if (!mounted) return;
-          setState(() {
-            messages.add('الطرف الآخر: $data');
-          });
+          log('📩 الطرف الآخر: $data');
         },
         onError: (error) {
-          if (!mounted) return;
-          setState(() {
-            messages.add('خطأ في الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
-            isConnecting = false;
-          });
+          log('❌ [خطأ اتصال]: $error');
+          isConnecting = false;
           _scheduleReconnect();
         },
         onDone: () {
-          if (!mounted) return;
-          setState(() {
-            messages.add('انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
-            isConnecting = false;
-          });
+          log('⚠️ [تنبيه]: انقطع الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
+          isConnecting = false;
           _scheduleReconnect();
         },
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        messages.add('فشل الاتصال، جاري إعادة المحاولة خلال 5 ثوانٍ...');
-        isConnecting = false;
-      });
+      log('❌ [خطأ في السيرفر/الشبكة]: $e');
+      isConnecting = false;
       _scheduleReconnect();
     }
   }
 
-  // دالة إعادة الاتصال التلقائي بذكاء
   void _scheduleReconnect() {
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
@@ -104,18 +133,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void sendMessage() {
     final text = messageController.text.trim();
-    if (text.isEmpty || channel == null) return;
+    if (text.isEmpty) return;
+
+    if (channel == null) {
+      log('⚠️ [تنبيه]: لا يمكنك الإرسال، غير متصل بالسيرفر حالياً.');
+      return;
+    }
 
     try {
       channel!.add(text);
-      setState(() {
-        messages.add('أنا: $text');
-      });
+      log('💬 أنا: $text');
       messageController.clear();
     } catch (e) {
-      setState(() {
-        messages.add('فشل إرسال الرسالة');
-      });
+      log('❌ [خطأ إرسال]: $e');
     }
   }
 
@@ -130,24 +160,29 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Joker Chat - Pro Smart'),
+        title: const Text('Joker Chat - Safe Guard'),
         backgroundColor: Colors.deepPurple,
       ),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
-              itemCount: messages.length,
+              itemCount: logsAndMessages.length,
               itemBuilder: (context, index) {
+                final item = logsAndMessages[index];
+                final isError = item.contains('❌') || item.contains('⚠️');
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
                   child: Card(
-                    elevation: 2,
+                    color: isError ? Colors.red.shade50 : Colors.white,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: Text(
-                        messages[index],
-                        style: const TextStyle(fontSize: 16),
+                        item,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isError ? Colors.red.shade900 : Colors.black87,
+                        ),
                       ),
                     ),
                   ),
@@ -163,7 +198,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: TextField(
                     controller: messageController,
                     decoration: const InputDecoration(
-                      hintText: 'اكتب رسالتك هنا...',
+                      hintText: 'اكتب رسالتك...',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => sendMessage(),
@@ -182,4 +217,5 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
 
