@@ -1,4 +1,4 @@
-package com.joker.chat_app
+package com.limited.chat_app
 
 import io.flutter.embedding.android.FlutterActivity
 
