@@ -434,7 +434,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             if (isMe) ...[
                               const SizedBox(width: 4),
                               _buildMessageStatusIcon(msg['status']),
-                            ], فقرات
+                            ], 
                           ],
                         ),
                       ],
