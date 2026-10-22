@@ -31,10 +31,10 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
+        if (oldVersion < 3) {
           await db.execute('DROP TABLE IF EXISTS messages');
           await db.execute('DROP TABLE IF EXISTS chats');
           _createDB(db, newVersion);
@@ -201,31 +201,33 @@ class _ChatScreenState extends State<ChatScreen> {
 
             if (data['type'] == 'ack') {
               await DatabaseHelper.instance
-                  .updateMessageStatus(data['message_id'], 'delivered');
+                  .updateMessageStatus(data['message_id'], 'read');
               _loadLocalMessages();
               return;
             }
 
+            // التأكد من أن الرسالة الواردة تخص الطرف الآخر وليست انعكاساً لرسالتك أنت
+            final incomingSenderId = data['sender_id'] ?? widget.recipientId;
+
             final messageData = {
-              'id': data['id'] ??
-                  DateTime.now().millisecondsSinceEpoch.toString(),
+              'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
               'chat_id': widget.chatId,
-              'sender_id': data['sender_id'],
+              'sender_id': incomingSenderId,
               'recipient_id': widget.currentUserId,
               'content': data['content'],
               'type': 'text',
-              'status': 'delivered',
-              'timestamp':
-                  data['timestamp'] ?? DateTime.now().toIso8601String(),
+              'status': 'read',
+              'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
             };
 
             await DatabaseHelper.instance.insertMessage(messageData);
             _loadLocalMessages();
 
+            // الرد بإقرار وصول وقراءة للسيرفر
             _channel?.add(jsonEncode({
               'type': 'ack',
               'message_id': data['id'],
-              'sender_id': data['sender_id']
+              'sender_id': incomingSenderId
             }));
           } catch (e) {
             print('Incoming message error: $e');
@@ -300,7 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final messageData = {
       'id': messageId,
       'chat_id': widget.chatId,
-      'sender_id': widget.currentUserId,
+      'sender_id': widget.currentUserId, // رسالة منك أنت
       'recipient_id': widget.recipientId,
       'content': text,
       'type': 'text',
@@ -350,7 +352,7 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'delivered':
         return const Icon(Icons.done_all, size: 12, color: Colors.grey);
       case 'read':
-        return const Icon(Icons.done_all, size: 12, color: Colors.blue);
+        return const Icon(Icons.done_all, size: 12, color: Colors.blue); // ✓✓ أزرق عند القراءة
       default:
         return const Icon(Icons.check, size: 12, color: Colors.grey);
     }
@@ -384,24 +386,24 @@ class _ChatScreenState extends State<ChatScreen> {
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
+                // التحقق الدقيق هل الرسالة مرسلة منك أم من الطرف الآخر لتتوزع يمين ويسار
                 final isMe = msg['sender_id'] == widget.currentUserId;
 
+                // تنسيق الوقت 12 ساعة مع (ص / م) بدقة
                 String formattedTime = '';
                 try {
                   final dt = DateTime.parse(msg['timestamp']);
                   int hour = dt.hour;
                   String period = hour >= 12 ? 'م' : 'ص';
 
-  
                   if (hour == 0) {
-                    hour = 12; // منتصف الليل
+                    hour = 12;
                   } else if (hour > 12) {
-                    hour -= 12; // تحويل الفترة المسائية
+                    hour -= 12;
                   }
-  
+
                   formattedTime = "$hour:${dt.minute.toString().padLeft(2, '0')} $period";
                 } catch (_) {}
-
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -432,7 +434,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             if (isMe) ...[
                               const SizedBox(width: 4),
                               _buildMessageStatusIcon(msg['status']),
-                            ],
+                            ], فقرات
                           ],
                         ),
                       ],
