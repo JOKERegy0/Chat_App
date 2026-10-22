@@ -389,9 +389,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 String formattedTime = '';
                 try {
                   final dt = DateTime.parse(msg['timestamp']);
-                  formattedTime =
-                      "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+                  int hour = dt.hour;
+                  String period = hour >= 12 ? 'م' : 'ص';
+
+  
+                  if (hour == 0) {
+                    hour = 12; // منتصف الليل
+                  } else if (hour > 12) {
+                    hour -= 12; // تحويل الفترة المسائية
+                  }
+  
+                  formattedTime = "$hour:${dt.minute.toString().padLeft(2, '0')} $period";
                 } catch (_) {}
+
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
