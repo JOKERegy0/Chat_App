@@ -4,18 +4,35 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🛡️ 1. فحص النزاهة والحماية الشامل قبل الإقلاع (تأكد من تفعيل الكلاس الخاص به)
-  // await IntegrityChecker.performStartupCheck();
+  // تهيئة Supabase بالبيانات الرسمية لمشروعك
+  await Supabase.initialize(
+    url: 'https://dymrernfuorzmbcaaocy.supabase.co',
+    anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z',
+  );
 
-  // 🗄️ 2. ضمان تهيئة قاعدة البيانات المحلية Sqflite قبل تشغيل الواجهات
-  await DatabaseHelper.instance.database;
-
-  runApp(const KiuraApp());
+  runApp(const MyApp());
 }
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'KIURA',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const Scaffold(
+        body: Center(child: Text('KIURA App Connected! 🚀')),
+      ),
+    );
+  }
+}
+
 
 // ==========================================
 // 1. نظام قاعدة البيانات المحلية المتقدم (Database Helper)
