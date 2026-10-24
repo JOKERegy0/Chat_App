@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'supabase_flutter/supabase_flutter.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -9,33 +8,11 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  final _supabase = Supabase.instance.client;
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _chats = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchChats();
-  }
-
-  // دالة لجلب المحادثات أو الأصدقاء من قاعدة البيانات
-  Future<void> _fetchChats() async {
-    try {
-      // كمثال، بنجيب المستخدمين المسجلين في النظام عشان نعرضهم كقائمة محادثات
-      final response = await _supabase.from('users').select().limit(10);
-      
-      setState(() {
-        _chats = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('خطأ في جلب المحادثات: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
+  final List<Map<String, dynamic>> _chats = [
+    {'username': 'Ali', 'email': 'متصل الآن'},
+    {'username': 'Sara', 'email': 'آخر ظهور منذ 5 دقائق'},
+    {'username': 'Omar', 'email': 'متصل الآن'},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -45,56 +22,143 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // بحث عن مستخدم أو محادثة
-            },
+            onPressed: () {},
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () {
-              // الانتقال للإعدادات لتعديل الـ Username مثلاً
-            },
+            onPressed: () {},
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _chats.isEmpty
-              ? const Center(
-                  child: Text(
-                    'لا توجد محادثات سابقة، ابدأ دردشة جديدة الآن!',
-                    style: TextStyle(color: Colors.grey),
+      body: ListView.builder(
+        itemCount: _chats.length,
+        itemBuilder: (context, index) {
+          final chat = _chats[index];
+          final name = chat['username'] ?? 'مستخدم';
+
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.indigo,
+              child: Text(name[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+            ),
+            title: Text(name),
+            subtitle: Text(chat['email'] ?? 'متصل الآن'),
+            trailing: const Text('12:45 م', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatRoomScreen(
+                    currentUserId: 'me',
+                    recipientId: 'user_${index + 1}',
+                    recipientName: name,
                   ),
-                )
-              : ListView.builder(
-                  itemCount: _chats.length,
-                  itemBuilder: (context, index) {
-                    final chat = _chats[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blueAccent,
-                        child: Text(
-                          (chat['username'] ?? 'U')[0].toUpperCase(),
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      title: Text(chat['username'] ?? 'مستخدم كيورا'),
-                      subtitle: Text(chat['email'] ?? chat['phone'] ?? 'متصل الآن'),
-                      trailing: const Text(
-                        '12:45 م',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                      onTap: () {
-                        // هنا هنتقل لشاشة الشات الفردي Chat Room Screen لما نخلصها
-                      },
-                    );
-                  },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // زر لبدء محادثة جديدة
+              );
+            },
+          );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {},
         child: const Icon(Icons.chat),
+      ),
+    );
+  }
+}
+
+class ChatRoomScreen extends StatefulWidget {
+  final String currentUserId;
+  final String recipientId;
+  final String recipientName;
+
+  const ChatRoomScreen({
+    super.key,
+    required this.currentUserId,
+    required this.recipientId,
+    required this.recipientName,
+  });
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+}
+
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final List<Map<String, dynamic>> _messages = [
+    {'sender': 'other', 'text': 'مرحبا! كيف الحال؟'},
+    {'sender': 'me', 'text': 'أحسنت، شكرًا'},
+  ];
+
+  void _sendMessage() {
+    final value = _messageController.text.trim();
+    if (value.isEmpty) return;
+
+    setState(() {
+      _messages.add({'sender': 'me', 'text': value});
+    });
+    _messageController.clear();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.recipientName, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final isMe = msg['sender'] == 'me';
+
+                return Align(
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isMe ? Colors.indigo[100] : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(msg['text'] ?? ''),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.white,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: const InputDecoration(
+                      hintText: 'اكتب رسالة...',
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Colors.indigo),
+                  onPressed: _sendMessage,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
