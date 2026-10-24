@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'signup_screen.dart'; // استدعاء شاشة التسجيل اللي عملناها
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // تهيئة Supabase بالبيانات الرسمية لمشروعك
+  // تهيئة اتصال Supabase بالبيانات الخاصة بمشروعك
   await Supabase.initialize(
-    url: 'https://dymrernfuorzmbcaaocy.supabase.co',
-    anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z',
+    url: 'https://dymrernfuorzmbcaaocy.supabase.co', // رابط مشروعك السحابي
+    anonKey: 'YOUR_SUPABASE_ANON_KEY', // مفتاح الـ Anon الخاص بك
   );
 
   runApp(const MyApp());
@@ -25,13 +26,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'KIURA',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const Scaffold(
-        body: Center(child: Text('KIURA App Connected! 🚀')),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
       ),
+      home: const SignupScreen(), // البدء من شاشة التسجيل الذكية
     );
   }
 }
+
 
 
 // ==========================================
