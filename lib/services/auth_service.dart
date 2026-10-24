@@ -19,81 +19,56 @@ class AuthService {
           .eq('username', username)
           .maybeSingle();
       
-      return response != null; // لو لقينا نتيجة يبقى الاسم محجوز
+      return response != null; // لو لقينا نتيجة يبقى الاسم محجوز مسبقاً
     } catch (e) {
       print('خطأ أثناء فحص اسم المستخدم: $e');
       return false;
     }
   }
 
-  // 3. دالة التسجيل والتحقق الشاملة حسب طريقة الدخول
+  // 3. دالة التسجيل والتحقق الشاملة وحفظ البيانات في قاعدة البيانات
   Future<Map<String, dynamic>> registerUser({
     required String authMethod, // 'phone', 'email', 'facebook', 'username'
+    required String password,
     String? email,
-    String? password,
     String? phone,
     String? facebookId,
     String? username,
   }) async {
     try {
-      // 📌 القاعدة الأولى: لو التسجيل مش برقم الهاتف (يعني بريد، فيسبوك، أو يوزر نيم) $\rightarrow$ الـ Username إجباري
+      // فحص الـ Username حسب القواعد (إجباري لو مش تليفون، واختياري لو تليفون)
       if (authMethod != 'phone') {
         if (username == null || username.trim().isEmpty) {
-          return {
-            'success': false, 
-            'message': 'عذراً، اسم المستخدم إجباري لهذه الطريقة.'
-          };
+          return {'success': false, 'message': 'عذراً، اسم المستخدم إجباري لهذه الطريقة.'};
         }
-
-        // فحص صيغة الـ Username
         if (!isValidUsernameFormat(username)) {
-          return {
-            'success': false, 
-            'message': 'اسم المستخدم غير صالح! يجب أن يحتوي على رقم أو رمز مميز (_ أو .) وبطول بين 3 و 20 خانة.'
-          };
+          return {'success': false, 'message': 'اسم المستخدم يجب أن يحتوي على رقم أو رمز مميز (_ أو .) وبطول من 3 لـ 20 خانة.'};
         }
-
-        // فحص التكرار في قاعدة البيانات
-        bool taken = await isUsernameTaken(username);
-        if (taken) {
-          return {
-            'success': false, 
-            'message': 'عذراً، هذا الاسم مستخدم مسبقاً، اختر اسماً آخر.'
-          };
+        if (await isUsernameTaken(username)) {
+          return {'success': false, 'message': 'عذراً، هذا الاسم مستخدم مسبقاً، اختر غيره.'};
         }
-      } 
-      // 📌 القاعدة الثانية: لو التسجيل برقم الهاتف $\rightarrow$ الـ Username اختياري
-      else {
+      } else {
         if (username != null && username.trim().isNotEmpty) {
           if (!isValidUsernameFormat(username)) {
-            return {
-              'success': false, 
-              'message': 'اسم المستخدم الاختياري غير صالح (يجب أن يحتوي على رقم أو رمز مميز).'
-            };
+            return {'success': false, 'message': 'اسم المستخدم الاختياري غير صالح.'};
           }
-          bool taken = await isUsernameTaken(username);
-          if (taken) {
-            return {
-              'success': false, 
-              'message': 'عذراً، هذا الاسم مستخدم مسبقاً، اختر اسماً آخر.'
-            };
+          if (await isUsernameTaken(username)) {
+            return {'success': false, 'message': 'عذراً، هذا الاسم مستخدم مسبقاً.'};
           }
         }
       }
 
-      // 🚀 لو كل الشروط سليمة، يتم حفظ البيانات في Supabase
-      /*
+      // إدخال البيانات مباشرة وحفظها في جدول users في Supabase (بدون أي تعليقات)
       await _supabase.from('users').insert({
         'username': (username != null && username.trim().isNotEmpty) ? username : null,
         'email': email,
         'phone': phone,
         'facebook_id': facebookId,
       });
-      */
 
       return {
         'success': true, 
-        'message': 'تم التحقق من البيانات وإنشاء الحساب بنجاح! 🚀'
+        'message': 'تم إنشاء الحساب وحفظ البيانات في قاعدة البيانات بنجاح! 🚀'
       };
 
     } catch (e) {
