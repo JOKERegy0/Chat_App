@@ -47,7 +47,24 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
 
-    if (result['success']) {
+        if (result['success']) {
+      // إرسال رسالة نجاح
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message']),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // الانتقال الشامل لشاشة المحادثات الرئيسية وحذف شاشة التسجيل من الذاكرة
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ChatsListScreen(),
+        ),
+      );
+    }
+
       // لو التسجيل نجح، ممكن تنقله للرئيسية هنا
     }
   }
