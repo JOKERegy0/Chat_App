@@ -3,6 +3,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // 1. التحقق من صيغة الـ Username (يحتوي على رقم أو رمز مميز)
+  bool isValidUsernameFormat(String username) {
+    RegExp regex = RegExp(r'^(?=.*[0-9_.])[a-zA-Z0-9_.]{3,20}$');
+    return regex.hasMatch(username);
+  }
+
+  // 2. التحقق هل الـ Username مستخدم قبل كده في قاعدة البيانات ولا لأ
+  Future<bool> isUsernameTaken(String username) async {
+    try {
+      final response = await _supabase
+          .from('users')
+          .select('id')
+          .eq('username', username)
+          .maybeSingle();
+
+      return response != null; // لو طلع فيه نتيجة يبقى الاسم مأخوذ فعلاً
+    } catch (e) {
+      print('خطأ في فحص اسم المستخدم: $e');
+      return false;
+    }
+  }
+}
+
+
+
   // 1. تسجيل الدخول بواسطة Google
   Future<bool> signInWithGoogle() async {
     try {
