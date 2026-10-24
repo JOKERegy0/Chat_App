@@ -3,20 +3,68 @@ import 'websocket_service.dart';
 import 'media_service.dart';
 import 'dart:io';
 
-class ChatRoomScreen extends StatefulWidget {
-  final String recipientId;
-  final String recipientName;
-  final String currentUserId;
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  // 1. حط كود التعريف هنا فوق في بداية الـ State
+  final ReportService _reportService = ReportService();
+  bool _isReporting = false;
 
-  const ChatRoomScreen({
-    super.key,
-    required this.recipientId,
-    required this.recipientName,
-    required this.currentUserId,
-  });
+  // 2. دالة التعامل مع الإبلاغ اللي سألت عنها
+  void handleUserReport(String reportedUserId, String chatEvidence, String ipAddress) async {
+    setState(() { _isReporting = true; });
+
+    bool success = await _reportService.submitReport(
+      reportedUserId: reportedUserId,
+      chatEvidence: chatEvidence,
+      reportedUserIp: ipAddress,
+    );
+
+    setState(() { _isReporting = false; });
+
+    if (success) {
+      // إرسال رسالة نجاح للمبلغ (تظهر كـ SnackBar مثلاً)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إرسال البلاغ بنجاح وسيتم مراجعته.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('حدث خطأ, حاول مرة أخرى.')),
+      );
+    }
+  }
 
   @override
-  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.recipientName),
+        actions: [
+          // 3. مثال لزرار إبلاغ في الـ AppBar (PopupMenuButton)
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'report') {
+                // هنا بنستدعي الدالة وندديها البيانات المطلوبة
+                handleUserReport(
+                  widget.recipientId, 
+                  'محتوى آخر رسالة أو المحادثة', 
+                  '192.168.1.1' // أو جلب الآيبي الحقيقي للمستخدم لو متاح
+                );
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'report',
+                child: Text('إبلاغ عن المستخدم', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: /* باقي تصميم الشاشة */,
+    );
+  }
+}
+
+@overrideeState<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
