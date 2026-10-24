@@ -7,6 +7,13 @@ import 'package:path/path.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 🛡️ 1. فحص النزاهة والحماية الشامل قبل الإقلاع (تأكد من تفعيل الكلاس الخاص به)
+  // await IntegrityChecker.performStartupCheck();
+
+  // 🗄️ 2. ضمان تهيئة قاعدة البيانات المحلية Sqflite قبل تشغيل الواجهات
+  await DatabaseHelper.instance.database;
+
   runApp(const KiuraApp());
 }
 
@@ -450,24 +457,55 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.all(8.0),
               child: Row(
                 children: [
+                                  // 1. مربع النص (Expanded عشان ياخد المساحة المتاحة)
                   Expanded(
                     child: TextField(
                       controller: _controller,
                       textDirection: TextDirection.rtl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'اكتب رسالتك في KIURA...',
                         border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: Colors.indigo),
-                    onPressed: _sendMessage,
-                  ),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                                                          ),
+                    onSubmitted: (_) => _sendMessage(),
+                                                                                        ),
+                                                                                      ),
+  
+                 const SizedBox(width: 4),
+
+                                                             // 2. زر إرفاق الوسائط والملفات الجديد (للسحابة و Supabase)
+                 IconButton(
+                   icon: const Icon(Icons.attach_file, color: Colors.indigo),
+                        onPressed: () {
+                          print("فتح منتقي الملفات للرفع السحابي...");
+                          // هنا هتربط File Picker لاحقاً
+                          // استدعاء منتقي الملفات عند الضغط على زر المرفقات
+onPressed: () async {
+  // استخدام مكتبة file_picker لاختيار الملفات والوسائط
+  FilePickerResult? result = await FilePicker.platform.pickFiles(
+    type: FileType.any,
+  );
+
+  if (result != null && result.files.single.path != null) {
+    String filePath = result.files.single.path!;
+    print("📁 تم اختيار الملف بنجاح: $filePath");
+    
+    // الخطوة القادمة هنا: إرسال الـ filePath إلى سيرفر الوسائط (Media Server)
+    // أو رفعه مباشرة إلى Supabase Storage Bucket وتوليد رابط الـ Public URL
+  } else {
+    print("❌ تم إلغاء اختيار الملف.");
+  }
+},
+                             },
+                                         ),
+
+                                const SizedBox(width: 4),
+
+                               // 3. زر الإرسال الأصلي
+                          IconButton(
+                          icon: const Icon(Icons.send, color: Colors.indigo),
+                         onPressed: _sendMessage,
+                 ),
                 ],
               ),
             ),
