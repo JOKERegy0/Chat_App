@@ -1,120 +1,100 @@
 import 'package:flutter/material.dart';
-import 'websocket_service.dart';
-import 'media_service.dart';
-import 'dart:io';
 
-class _ChatRoomScreenState extends State<ChatRoomScreen> {
-  // 1. حط كود التعريف هنا فوق في بداية الـ State
-  final ReportService _reportService = ReportService();
-  bool _isReporting = false;
+class ChatsListScreen extends StatefulWidget {
+  const ChatsListScreen({super.key});
 
-  // 2. دالة التعامل مع الإبلاغ اللي سألت عنها
-  void handleUserReport(String reportedUserId, String chatEvidence, String ipAddress) async {
-    setState(() { _isReporting = true; });
+  @override
+  State<ChatsListScreen> createState() => _ChatsListScreenState();
+}
 
-    bool success = await _reportService.submitReport(
-      reportedUserId: reportedUserId,
-      chatEvidence: chatEvidence,
-      reportedUserIp: ipAddress,
-    );
-
-    setState(() { _isReporting = false; });
-
-    if (success) {
-      // إرسال رسالة نجاح للمبلغ (تظهر كـ SnackBar مثلاً)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال البلاغ بنجاح وسيتم مراجعته.')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('حدث خطأ, حاول مرة أخرى.')),
-      );
-    }
-  }
+class _ChatsListScreenState extends State<ChatsListScreen> {
+  final List<Map<String, dynamic>> _chats = [
+    {'username': 'Ali', 'email': 'متصل الآن'},
+    {'username': 'Sara', 'email': 'آخر ظهور منذ 5 دقائق'},
+    {'username': 'Omar', 'email': 'متصل الآن'},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.recipientName),
+        title: const Text('KIURA - المحادثات', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          // 3. مثال لزرار إبلاغ في الـ AppBar (PopupMenuButton)
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'report') {
-                // هنا بنستدعي الدالة وندديها البيانات المطلوبة
-                handleUserReport(
-                  widget.recipientId, 
-                  'محتوى آخر رسالة أو المحادثة', 
-                  '192.168.1.1' // أو جلب الآيبي الحقيقي للمستخدم لو متاح
-                );
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'report',
-                child: Text('إبلاغ عن المستخدم', style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
         ],
       ),
-      body: /* باقي تصميم الشاشة */,
+      body: ListView.builder(
+        itemCount: _chats.length,
+        itemBuilder: (context, index) {
+          final chat = _chats[index];
+          final name = chat['username'] ?? 'مستخدم';
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.indigo,
+              child: Text(name[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+            ),
+            title: Text(name),
+            subtitle: Text(chat['email'] ?? 'متصل الآن'),
+            trailing: const Text('12:45 م', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatRoomScreen(
+                    currentUserId: 'me',
+                    recipientId: 'user_${index + 1}',
+                    recipientName: name,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {},
+        child: const Icon(Icons.chat),
+      ),
     );
   }
 }
 
-@overrideeState<ChatRoomScreen> createState() => _ChatRoomScreenState();
+class ChatRoomScreen extends StatefulWidget {
+  final String currentUserId;
+  final String recipientId;
+  final String recipientName;
+
+  const ChatRoomScreen({
+    super.key,
+    required this.currentUserId,
+    required this.recipientId,
+    required this.recipientName,
+  });
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
-  final WebSocketService _wsService = WebSocketService();
-  final MediaService _mediaService = MediaService();
   final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [];
+  final List<Map<String, dynamic>> _messages = [
+    {'sender': 'other', 'text': 'مرحبا! كيف الحال؟'},
+    {'sender': 'me', 'text': 'أحسنت، شكرًا'},
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    // 1. الاتصال بسيرفر الـ WebSocket لحظياً
-    _wsService.connect(widget.currentUserId);
-
-    // 2. الاستماع للرسائل الواردة من السيرفر
-    _wsService.messagesStream?.listen((data) {
-      setState(() {
-        _messages.add({
-          'sender': 'other',
-          'text': data.toString(),
-          'time': DateTime.now().toString(),
-        });
-      });
-    });
-  }
-
-  // دالة إرسال الرسالة عبر الـ WebSocket
   void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
+    final value = _messageController.text.trim();
+    if (value.isEmpty) return;
 
-    String textToSend = _messageController.text.trim();
-
-    // إرسال الرسالة للسيرفر
-    _wsService.sendMessage(widget.recipientId, textToSend);
-
-    // إضافة الرسالة مباشرة لواجهة المستخدم المحلية
     setState(() {
-      _messages.add({
-        'sender': 'me',
-        'text': textToSend,
-        'time': DateTime.now().toString(),
-      });
+      _messages.add({'sender': 'me', 'text': value});
     });
-
     _messageController.clear();
   }
 
   @override
   void dispose() {
-    _wsService.disconnect();
     _messageController.dispose();
     super.dispose();
   }
@@ -124,61 +104,48 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.recipientName, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blueAccent,
       ),
       body: Column(
         children: [
-          // قائمة عرض الرسائل لحظياً
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
-                bool isMe = msg['sender'] == 'me';
+                final isMe = msg['sender'] == 'me';
+
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isMe ? Colors.blue[100] : Colors.grey[200],
+                      color: isMe ? Colors.indigo[100] : Colors.grey[200],
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      msg['text'],
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    child: Text(msg['text'] ?? ''),
                   ),
                 );
               },
             ),
           ),
-
-          // شريط إدخال الرسائل والأزرار
           Container(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(8),
             color: Colors.white,
             child: Row(
               children: [
-                // زر إرفاق الوسائط (صور أو ملفات) باستخدام MediaService
-                IconButton(
-                  icon: const Icon(Icons.attach_file, color: Colors.blueAccent),
-                  onPressed: () {
-                    // هنا سيتم فتح معرض الصور ورفعها عبر MediaService لاحقاً
-                  },
-                ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     decoration: const InputDecoration(
-                      hintText: 'اكتب رسالتك هنا...',
+                      hintText: 'اكتب رسالة...',
                       border: InputBorder.none,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blueAccent),
+                  icon: const Icon(Icons.send, color: Colors.indigo),
                   onPressed: _sendMessage,
                 ),
               ],
