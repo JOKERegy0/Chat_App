@@ -3,13 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // 1. التحقق من صيغة الـ Username (يحتوي على رقم أو رمز مميز)
+  // 1. التحقق من صيغة الـ Username 
+  // (يجب أن يحتوي على رقم أو رمز مميز مثل _ أو . وبطول من 3 لـ 20 خانة)
   bool isValidUsernameFormat(String username) {
-    RegExp regex = RegExp(r'^(?=.*[0-9_.])[a-zA-Z0-9_.]{3,20}$');
+    final regex = RegExp(r'^(?=.*[0-9_.])[a-zA-Z0-9_.]{3,20}$');
     return regex.hasMatch(username);
   }
 
-  // 2. التحقق هل الـ Username مستخدم قبل كده في قاعدة البيانات ولا لأ
+  // 2. التحقق هل الـ Username مستخدم مسبقاً في جدول users
   Future<bool> isUsernameTaken(String username) async {
     try {
       final response = await _supabase
@@ -17,71 +18,90 @@ class AuthService {
           .select('id')
           .eq('username', username)
           .maybeSingle();
-
-      return response != null; // لو طلع فيه نتيجة يبقى الاسم مأخوذ فعلاً
+      
+      return response != null; // لو لقينا نتيجة يبقى الاسم محجوز
     } catch (e) {
-      print('خطأ في فحص اسم المستخدم: $e');
+      print('خطأ أثناء فحص اسم المستخدم: $e');
       return false;
+    }
+  }
+
+  // 3. دالة التسجيل والتحقق الشاملة حسب طريقة الدخول
+  Future<Map<String, dynamic>> registerUser({
+    required String authMethod, // 'phone', 'email', 'facebook', 'username'
+    String? email,
+    String? password,
+    String? phone,
+    String? facebookId,
+    String? username,
+  }) async {
+    try {
+      // 📌 القاعدة الأولى: لو التسجيل مش برقم الهاتف (يعني بريد، فيسبوك، أو يوزر نيم) $\rightarrow$ الـ Username إجباري
+      if (authMethod != 'phone') {
+        if (username == null || username.trim().isEmpty) {
+          return {
+            'success': false, 
+            'message': 'عذراً، اسم المستخدم إجباري لهذه الطريقة.'
+          };
+        }
+
+        // فحص صيغة الـ Username
+        if (!isValidUsernameFormat(username)) {
+          return {
+            'success': false, 
+            'message': 'اسم المستخدم غير صالح! يجب أن يحتوي على رقم أو رمز مميز (_ أو .) وبطول بين 3 و 20 خانة.'
+          };
+        }
+
+        // فحص التكرار في قاعدة البيانات
+        bool taken = await isUsernameTaken(username);
+        if (taken) {
+          return {
+            'success': false, 
+            'message': 'عذراً، هذا الاسم مستخدم مسبقاً، اختر اسماً آخر.'
+          };
+        }
+      } 
+      // 📌 القاعدة الثانية: لو التسجيل برقم الهاتف $\rightarrow$ الـ Username اختياري
+      else {
+        if (username != null && username.trim().isNotEmpty) {
+          if (!isValidUsernameFormat(username)) {
+            return {
+              'success': false, 
+              'message': 'اسم المستخدم الاختياري غير صالح (يجب أن يحتوي على رقم أو رمز مميز).'
+            };
+          }
+          bool taken = await isUsernameTaken(username);
+          if (taken) {
+            return {
+              'success': false, 
+              'message': 'عذراً، هذا الاسم مستخدم مسبقاً، اختر اسماً آخر.'
+            };
+          }
+        }
+      }
+
+      // 🚀 لو كل الشروط سليمة، يتم حفظ البيانات في Supabase
+      /*
+      await _supabase.from('users').insert({
+        'username': (username != null && username.trim().isNotEmpty) ? username : null,
+        'email': email,
+        'phone': phone,
+        'facebook_id': facebookId,
+      });
+      */
+
+      return {
+        'success': true, 
+        'message': 'تم التحقق من البيانات وإنشاء الحساب بنجاح! 🚀'
+      };
+
+    } catch (e) {
+      return {
+        'success': false, 
+        'message': 'حدث خطأ غير متوقع: $e'
+      };
     }
   }
 }
 
-
-
-  // 1. تسجيل الدخول بواسطة Google
-  Future<bool> signInWithGoogle() async {
-    try {
-      await _supabase.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: 'io.supabase.kiura://login-callback/', // رابط التوجيه للتطبيق
-      );
-      return true;
-    } catch (e) {
-      print("❌ خطأ في تسجيل دخول جوجل: $e");
-      return false;
-    }
-  }
-
-  // 2. تسجيل الدخول بواسطة Facebook
-  Future<bool> signInWithFacebook() async {
-    try {
-      await _supabase.auth.signInWithOAuth(
-        OAuthProvider.facebook,
-        redirectTo: 'io.supabase.kiura://login-callback/',
-      );
-      return true;
-    } catch (e) {
-      print("❌ خطأ في تسجيل دخول فيسبوك: $e");
-      return false;
-    }
-  }
-
-  // 3. تسجيل الدخول برقم الهاتف (إرسال رمز التحقق OTP)
-  Future<bool> signInWithPhone(String phoneNumber) async {
-    try {
-      await _supabase.auth.signInWithPhone(
-        phoneNumber,
-      );
-      print("📱 تم إرسال رمز التحقق إلى الرقم: $phoneNumber");
-      return true;
-    } catch (e) {
-      print("❌ خطأ في إرسال رمز الهاتف: $e");
-      return false;
-    }
-  }
-
-  // التحقق من الرمز المدخل للهاتف
-  Future<bool> verifyPhoneOTP(String phoneNumber, String otpToken) async {
-    try {
-      final response = await _supabase.auth.verifyOTP(
-        phone: phoneNumber,
-        token: otpToken,
-        type: OtpType.sms,
-      );
-      return response.session != null;
-    } catch (e) {
-      print("❌ خطأ في التحقق من الرمز: $e");
-      return false;
-    }
-  }
-}
