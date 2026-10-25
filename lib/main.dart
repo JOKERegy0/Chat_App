@@ -11,32 +11,33 @@ import 'views/signup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // تهيئة اتصال Supabase بالبيانات الخاصة بمشروعك
+  
   await Supabase.initialize(
-    url: 'https://dymrernfuorzmbcaaocy.supabase.co', // رابط مشروعك السحابي
-    anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z', // مفتاح الـ Anon الخاص بك
+    url: 'https://dymrernfuorzmbcaaocy.supabase.co',
+    anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z',
   );
 
-  runApp(const MyApp());
+  // فحص ما إذا كان المستخدم مسجل دخوله مسبقاً
+  final session = Supabase.instance.client.auth.currentSession;
+
+  runApp(MyApp(isLoggedIn: session != null));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isLoggedIn;
+  const MyApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KIURA',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const SignupScreen(), // البدء من شاشة التسجيل الذكية
+      title: 'KIURA',
+      // لو مسجل دخول يروح للمحادثات، لو لأ يروح لشاشة التسجيل
+      home: isLoggedIn ? const ChatsScreen() : const SignupScreen(),
     );
   }
 }
+
 
 
 
