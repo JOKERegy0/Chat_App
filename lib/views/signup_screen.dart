@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import 'chats_list_screen.dart';
+import 'auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -20,10 +19,12 @@ class _SignupScreenState extends State<SignupScreen> {
   String _selectedAuthMethod = 'email';
   bool _isLoading = false;
 
-  Future<void> _submitRegistration() async {
-    setState(() => _isLoading = true);
+  void _submitRegistration() async {
+    setState(() {
+      _isLoading = true;
+    });
 
-    final result = await _authService.registerUser(
+    var result = await _authService.registerUser(
       authMethod: _selectedAuthMethod,
       password: _passwordController.text.trim(),
       email: _selectedAuthMethod == 'email' ? _emailController.text.trim() : null,
@@ -31,19 +32,23 @@ class _SignupScreenState extends State<SignupScreen> {
       username: _usernameController.text.trim(),
     );
 
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = false;
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result['message']?.toString() ?? 'حدث خطأ غير متوقع'),
-        backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+        content: Text(result['message']),
+        backgroundColor: result['success'] ? Colors.green : Colors.red,
       ),
     );
 
-    if (result['success'] == true) {
+    if (result['success']) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const ChatsListScreen()),
+        MaterialPageRoute(
+          builder: (context) => const ChatsListScreen(),
+        ),
       );
     }
   }
@@ -53,21 +58,20 @@ class _SignupScreenState extends State<SignupScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('إنشاء حساب جديد - KIURA')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
             DropdownButton<String>(
               value: _selectedAuthMethod,
-              isExpanded: true,
               items: const [
                 DropdownMenuItem(value: 'email', child: Text('التسجيل بالبريد الإلكتروني')),
                 DropdownMenuItem(value: 'phone', child: Text('التسجيل برقم الهاتف')),
                 DropdownMenuItem(value: 'username', child: Text('التسجيل باسم المستخدم')),
               ],
               onChanged: (value) {
-                if (value != null) {
-                  setState(() => _selectedAuthMethod = value);
-                }
+                setState(() {
+                  _selectedAuthMethod = value!;
+                });
               },
             ),
             const SizedBox(height: 16),
