@@ -15,7 +15,7 @@ void main() async {
   // تهيئة اتصال Supabase بالبيانات الخاصة بمشروعك
   await Supabase.initialize(
     url: 'https://dymrernfuorzmbcaaocy.supabase.co', // رابط مشروعك السحابي
-    anonKey: 'YOUR_SUPABASE_ANON_KEY', // مفتاح الـ Anon الخاص بك
+    anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z', // مفتاح الـ Anon الخاص بك
   );
 
   runApp(const MyApp());
