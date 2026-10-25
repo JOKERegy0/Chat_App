@@ -6,7 +6,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'signup_screen.dart'; // استدعاء شاشة التسجيل اللي عملناها
+import 'views/signup_screen.dart';
+// استدعاء شاشة التسجيل اللي عملناها
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
