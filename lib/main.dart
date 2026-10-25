@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'KIURA',
       // لو مسجل دخول يروح للمحادثات، لو لأ يروح لشاشة التسجيل
-      home: isLoggedIn ? const ChatsScreen() : const SignupScreen(),
+      home: isLoggedIn ? ChatsScreen() : SignupScreen(),
     );
   }
 }
