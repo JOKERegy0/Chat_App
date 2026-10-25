@@ -20,14 +20,14 @@ class SecurityEngine {
     final digest = hmacSha256.convert(messageBytes);
     final signature = digest.toString();
 
-        return {
+         return {
       "type": "handshake",
       "user_id": userId,
       "device_id": deviceId,
       "timestamp": timestamp,
       "signature": signature,
-    }; // هنا الـ Map قفلت بـ }; لأنها جوه الدالة
-  }    // هنا قفلة الدالة
-}      // هنا قفلة الكلاس (قوس عادي بدون نقطة منقوطة)
+     }; // هنا الـ Map قفلت بـ }; لأنها جوه الدالة
+   }    // هنا قفلة الدالة
+ }      // هنا قفلة الكلاس (قوس عادي بدون نقطة منقوطة)
 
 
