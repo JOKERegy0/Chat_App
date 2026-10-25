@@ -4,7 +4,7 @@ import 'dart:convert';
 
 class MediaService {
   // رابط سيرفر الوسائط على Render اللي حددناه في الإعدادات
-  final String _mediaServiceUrl = 'https://chat-app-rtby.onrender.com';
+  final String _mediaServiceUrl = 'https://chat-app-iqrv.onrender.com';
 
   // دالة لرفع الوسائط (صور، فيديوهات، أو حالات صوتية)
   Future<String?> uploadMedia(File file, String folderName) async {
