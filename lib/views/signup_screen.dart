@@ -47,7 +47,7 @@ class _SignupScreenState extends State<SignupScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const ChatsListScreen(),
+          builder: (context) => ChatsListScreen(),
         ),
       );
     }
