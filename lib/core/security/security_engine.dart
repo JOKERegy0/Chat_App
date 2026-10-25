@@ -26,6 +26,6 @@ class SecurityEngine {
       "device_id": deviceId,
       "timestamp": timestamp,
       "signature": signature, // البصمة الرياضية غير القابلة للتزوير
-    };
-  }
-}
+     };
+   }
+ }
