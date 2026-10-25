@@ -7,6 +7,7 @@ import 'package:path/path.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'views/signup_screen.dart';
+import 'views/chats_list_screen.dart';
 // استدعاء شاشة التسجيل اللي عملناها
 
 void main() async {
@@ -17,7 +18,6 @@ void main() async {
     anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z',
   );
 
-  // فحص ما إذا كان المستخدم مسجل دخوله مسبقاً
   final session = Supabase.instance.client.auth.currentSession;
 
   runApp(MyApp(isLoggedIn: session != null));
@@ -32,13 +32,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'KIURA',
-      // لو مسجل دخول يروح للمحادثات، لو لأ يروح لشاشة التسجيل
-      home: isLoggedIn ? ChatsScreen() : SignupScreen(),
+      home: isLoggedIn ? ChatsListScreen() : SignupScreen(),
     );
   }
 }
-
-
 
 
 // ==========================================
