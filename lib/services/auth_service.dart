@@ -58,13 +58,15 @@ class AuthService {
         }
       }
 
-      // إدخال البيانات مباشرة وحفظها في جدول users في Supabase (بدون أي تعليقات)
-      await _supabase.from('users').insert({
-        'username': (username != null && username.trim().isNotEmpty) ? username : null,
-        'email': email,
-        'phone': phone,
-        'facebook_id': facebookId,
-      });
+       // مثال صحيح لكود التسجيل في AuthService
+        final response = await supabase.auth.signUp(
+          email: email, // أو رقم الهاتف حسب طريقة التسجيل
+            password: password,
+             data: {
+              'username': username, // الـ Trigger سيلتقط هذا الحقل ويحفظه في جدول users أوتوماتيكياً
+          },
+         );
+
 
       return {
         'success': true, 
