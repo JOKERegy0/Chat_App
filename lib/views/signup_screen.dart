@@ -26,7 +26,7 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      var result = await _authService.registerUser(
+      var result = await _authService.signUp(
         authMethod: _selectedAuthMethod,
         password: _passwordController.text.trim(),
         email: _selectedAuthMethod == 'email' ? _emailController.text.trim() : null,
