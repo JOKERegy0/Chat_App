@@ -15,7 +15,7 @@ class AuthService {
       final response = await _supabase
           .from('users')
           .select('id')
-          .eq('username', username)
+      .eq('username', username)
           .maybeSingle();
 
       return response != null; // لو لقينا نتيجة يبقى الاسم محجوز
@@ -123,7 +123,7 @@ class AuthService {
       final userData = await _supabase
           .from('users')
           .select('email, phone')
-          .eq('username', username)
+      .eq('username', username)
           .maybeSingle();
 
       if (userData == null) {
@@ -160,7 +160,7 @@ class AuthService {
         phone: !isEmail ? emailOrPhone : null,
         password: password,
       );
-      
+
       return response;
     } catch (e) {
       print('خطأ أثناء تسجيل الدخول المباشر: $e');
@@ -175,7 +175,7 @@ class AuthService {
         OAuthProvider.facebook,
         redirectTo: 'io.supabase.kiura://login-callback/',
       );
-      
+
       return response;
     } catch (e) {
       print('خطأ أثناء تسجيل الدخول بـ Facebook: $e');
