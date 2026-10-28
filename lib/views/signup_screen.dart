@@ -1,8 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:kiura/services/auth_service.dart';
-// استبدل السطر التالي بمسار شاشة المحادثات الفعلي عندك في المشروع لو اسم الملف مختلف
-// import 'package:kiura/views/chat_list_screen.dart'; 
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -14,26 +12,14 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final AuthService _authService = AuthService();
 
-  bool _isLoginMode = false;
-  String _selectedMethod = 'username'; // 'username', 'email', 'phone'
+  bool _isLoginMode = true; // البدء بتسجيل الدخول كوضع افتراضي سلس
+  String _selectedMethod = 'username';
 
   final _usernameController = TextEditingController();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
-
-  // الانتقال الفعلي والحقيقي لشاشة المحادثات بعد النجاح
-  void _navigateToChats() {
-    // لو اسم شاشة المحادثات عندك مختلف، قم بتعديل (ChatListScreen) بالاسم الصحيح
-    /* 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ChatListScreen()),
-    );
-    */
-    _showToast('تم تسجيل الدخول بنجاح والانتقال للمحادثات! 🚀', Colors.green);
-  }
 
   Future<void> _handleSubmit() async {
     setState(() => _isLoading = true);
@@ -48,32 +34,20 @@ class _SignupScreenState extends State<SignupScreen> {
         } else {
           await _authService.signInWithUsername(username: identifier, password: password);
         }
-        _showToast('تم تسجيل الدخول بنجاح! 🚀', Colors.green);
-        _navigateToChats();
+        // التوجيه سيتم تلقائياً عبر main.dart بفضل الـ StreamBuilder
       } else {
         if (_selectedMethod == 'username') {
-          await _authService.signUpWithUsernameOnly(
-            username: username,
-            password: password,
-          );
+          await _authService.signUpWithUsernameOnly(username: username, password: password);
         } else if (_selectedMethod == 'email') {
-          await _authService.signUpWithEmail(
-            email: identifier,
-            password: password,
-            username: username,
-          );
+          await _authService.signUpWithEmail(email: identifier, password: password, username: username);
         } else if (_selectedMethod == 'phone') {
-          await _authService.signUpWithPhone(
-            phone: identifier,
-            password: password,
-            username: username.isEmpty ? null : username,
-          );
+          await _authService.signUpWithPhone(phone: identifier, password: password, username: username.isEmpty ? null : username);
         }
-        _showToast('تم إنشاء الحساب بنجاح! أهلاً بك في KIURA ✨', Colors.green);
-        _navigateToChats();
       }
     } catch (e) {
-      _showToast('خطأ: $e', Colors.redAccent);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.redAccent),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
@@ -83,18 +57,13 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
     try {
       await _authService.signInWithFacebook();
-      _navigateToChats();
     } catch (e) {
-      _showToast('خطأ في فيسبوك: $e', Colors.redAccent);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ فيسبوك: $e'), backgroundColor: Colors.redAccent),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  void _showToast(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color, duration: const Duration(seconds: 3)),
-    );
   }
 
   @override
@@ -103,53 +72,65 @@ class _SignupScreenState extends State<SignupScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF0F172A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF090D16)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // شعار التطبيق
                   const Text(
                     'KIURA',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Color(0xFF38BDF8),
-                      fontSize: 40,
+                      fontSize: 42,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 3.0,
+                      letterSpacing: 3.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     _isLoginMode ? 'مرحباً بك مجدداً في عالم المحادثات الآمنة' : 'انضم إلينا وابدأ التواصل بلا حدود',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
 
-                  // تأثير الزجاج السائل (Liquid Glassmorphism) الفاخر
+                  // كبسولة الزجاج السائل الكبرى (Liquid Glass Card)
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(32),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
                       child: Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.07),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
+                          // تأثير الزجاج السائل العاكس (شفاف مع لمعة خفيفة وحواف بيضاء مضيئة)
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.12),
+                              Colors.white.withOpacity(0.04),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.22),
+                            width: 1.5,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
@@ -160,25 +141,25 @@ class _SignupScreenState extends State<SignupScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _buildGlassTab('يوزرنيم', Icons.alternate_email_rounded, 'username'),
+                                  _buildLiquidTab('يوزرنيم', Icons.alternate_email_rounded, 'username'),
                                   const SizedBox(width: 8),
-                                  _buildGlassTab('إيميل', Icons.mark_email_unread_rounded, 'email'),
+                                  _buildLiquidTab('إيميل', Icons.mark_email_unread_rounded, 'email'),
                                   const SizedBox(width: 8),
-                                  _buildGlassTab('هاتف', Icons.phone_iphone_rounded, 'phone'),
+                                  _buildLiquidTab('هاتف', Icons.phone_iphone_rounded, 'phone'),
                                 ],
                               ),
                               const SizedBox(height: 20),
                             ],
 
                             if (!_isLoginMode && _selectedMethod != 'phone') ...[
-                              _buildGlassTextField(
+                              _buildLiquidTextField(
                                 controller: _usernameController,
                                 label: 'اسم المستخدم (Username)',
                                 icon: Icons.alternate_email_rounded,
                               ),
                               const SizedBox(height: 16),
                             ] else if (!_isLoginMode && _selectedMethod == 'phone') ...[
-                              _buildGlassTextField(
+                              _buildLiquidTextField(
                                 controller: _usernameController,
                                 label: 'اسم المستخدم (اختياري)',
                                 icon: Icons.person_outline_rounded,
@@ -186,40 +167,37 @@ class _SignupScreenState extends State<SignupScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            _buildGlassTextField(
+                            _buildLiquidTextField(
                               controller: _identifierController,
                               label: _isLoginMode 
                                   ? 'اسم المستخدم أو البريد أو الهاتف' 
-                                  : (_selectedMethod == 'email' 
-                                      ? 'البريد الإلكتروني الحقيقي' 
-                                      : (_selectedMethod == 'phone' ? 'رقم الهاتف' : 'اسم المستخدم الفريد')),
+                                  : (_selectedMethod == 'email' ? 'البريد الإلكتروني الحقيقي' : (_selectedMethod == 'phone' ? 'رقم الهاتف' : 'اسم المستخدم الفريد')),
                               icon: _isLoginMode 
                                   ? Icons.fingerprint_rounded 
-                                  : (_selectedMethod == 'email' 
-                                      ? Icons.email_outlined 
-                                      : (_selectedMethod == 'phone' ? Icons.phone_outlined : Icons.alternate_email_rounded)),
+                                  : (_selectedMethod == 'email' ? Icons.email_outlined : (_selectedMethod == 'phone' ? Icons.phone_outlined : Icons.alternate_email_rounded)),
                             ),
                             const SizedBox(height: 16),
 
-                            _buildGlassTextField(
+                            _buildLiquidTextField(
                               controller: _passwordController,
                               label: 'كلمة المرور الآمنة',
                               icon: Icons.lock_outline_rounded,
                               isPassword: true,
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 28),
 
+                            // زر التنفيذ السائل المتدرج
                             Container(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
                                 ),
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(18),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF0284C7).withOpacity(0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
+                                    color: const Color(0xFF0284C7).withOpacity(0.5),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 6),
                                   )
                                 ],
                               ),
@@ -230,7 +208,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   shadowColor: Colors.transparent,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                 ),
                                 child: _isLoading
                                     ? const SizedBox(
@@ -239,8 +217,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                       )
                                     : Text(
-                                        _isLoginMode ? 'تسجيل الدخول' : 'إنشاء الحساب الان',
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        _isLoginMode ? 'تسجيل الدخول' : 'إنشاء الحساب الآن',
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                       ),
                               ),
                             ),
@@ -249,8 +227,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
+                  // فاصل
                   Row(
                     children: [
                       const Expanded(child: Divider(color: Colors.white24)),
@@ -261,10 +240,11 @@ class _SignupScreenState extends State<SignupScreen> {
                       const Expanded(child: Divider(color: Colors.white24)),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
+                  // زر فيسبوك بالزجاج السائل
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(18),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: OutlinedButton.icon(
@@ -273,15 +253,16 @@ class _SignupScreenState extends State<SignupScreen> {
                         label: const Text('المتابعة باستخدام فيسبوك', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: Colors.white.withOpacity(0.04),
+                          backgroundColor: Colors.white.withOpacity(0.05),
                           side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
 
+                  // زر التبديل بين الدخول وإنشاء حساب
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -311,7 +292,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildGlassTab(String title, IconData icon, String method) {
+  // تبويب سائل يعكس أسلوب الكبسولات الزجاجية
+  Widget _buildLiquidTab(String title, IconData icon, String method) {
     bool isSelected = _selectedMethod == method;
     return Expanded(
       child: GestureDetector(
@@ -320,12 +302,15 @@ class _SignupScreenState extends State<SignupScreen> {
           duration: const Duration(milliseconds: 250),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0284C7).withOpacity(0.8) : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
+            color: isSelected ? const Color(0xFF0284C7).withOpacity(0.85) : Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? const Color(0xFF38BDF8) : Colors.white.withOpacity(0.1),
+              color: isSelected ? const Color(0xFF38BDF8) : Colors.white.withOpacity(0.12),
               width: isSelected ? 1.5 : 1,
             ),
+            boxShadow: isSelected
+                ? [BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))]
+                : [],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -347,7 +332,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildGlassTextField({
+  // حقل إدخال زجاجي سائل متطور
+  Widget _buildLiquidTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
@@ -362,17 +348,17 @@ class _SignupScreenState extends State<SignupScreen> {
         labelStyle: const TextStyle(color: Colors.white60, fontSize: 13),
         prefixIcon: Icon(icon, color: const Color(0xFF38BDF8), size: 20),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
+        fillColor: Colors.white.withOpacity(0.05),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
         ),
       ),
