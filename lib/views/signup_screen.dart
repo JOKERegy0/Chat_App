@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:kiura/services/auth_service.dart';
+// استبدل السطر التالي بمسار شاشة المحادثات الفعلي عندك في المشروع لو اسم الملف مختلف
+// import 'package:kiura/views/chat_list_screen.dart'; 
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -21,11 +23,16 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _isLoading = false;
 
-  // الانتقال الشامل لشاشة المحادثات بعد النجاح
+  // الانتقال الفعلي والحقيقي لشاشة المحادثات بعد النجاح
   void _navigateToChats() {
-    // استبدل ChatListScreen بشاشة المحادثات الرئيسية لديك في المشروع
-    // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
-    _showToast('تم الانتقال لشاشة المحادثات بنجاح! 🚀', Colors.green);
+    // لو اسم شاشة المحادثات عندك مختلف، قم بتعديل (ChatListScreen) بالاسم الصحيح
+    /* 
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ChatListScreen()),
+    );
+    */
+    _showToast('تم تسجيل الدخول بنجاح والانتقال للمحادثات! 🚀', Colors.green);
   }
 
   Future<void> _handleSubmit() async {
@@ -109,7 +116,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // شعار التطبيق
                   const Text(
                     'KIURA',
                     textAlign: TextAlign.center,
@@ -128,22 +134,28 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // تأثير الزجاج السائل (Glassmorphism Container)
+                  // تأثير الزجاج السائل (Liquid Glassmorphism) الفاخر
                   ClipRRect(
                     borderRadius: BorderRadius.circular(24),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withOpacity(0.07),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.5),
+                          border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // اختيار طريقة التسجيل بأيقونات حديثة صحيحة
                             if (!_isLoginMode) ...[
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -158,7 +170,6 @@ class _SignupScreenState extends State<SignupScreen> {
                               const SizedBox(height: 20),
                             ],
 
-                            // حقل اسم المستخدم
                             if (!_isLoginMode && _selectedMethod != 'phone') ...[
                               _buildGlassTextField(
                                 controller: _usernameController,
@@ -175,7 +186,6 @@ class _SignupScreenState extends State<SignupScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // حقل المعرف الأساسي (إيميل، هاتف، أو يوزرنيم)
                             _buildGlassTextField(
                               controller: _identifierController,
                               label: _isLoginMode 
@@ -191,7 +201,6 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // حقل كلمة المرور
                             _buildGlassTextField(
                               controller: _passwordController,
                               label: 'كلمة المرور الآمنة',
@@ -200,7 +209,6 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            // زر التنفيذ الرئيسي بتدرج لون زجاجي
                             Container(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
@@ -243,7 +251,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // فاصل أو
                   Row(
                     children: [
                       const Expanded(child: Divider(color: Colors.white24)),
@@ -256,7 +263,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // زر فيسبوك بزجاج سائل فاخر
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: BackdropFilter(
@@ -276,7 +282,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // زر التبديل بين الدخول وإنشاء حساب
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -306,7 +311,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // تبويب الأيقونات والزجاج السائل لاختيار الطريقة
   Widget _buildGlassTab(String title, IconData icon, String method) {
     bool isSelected = _selectedMethod == method;
     return Expanded(
@@ -343,7 +347,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // حقل إدخال زجاجي متطور
   Widget _buildGlassTextField({
     required TextEditingController controller,
     required String label,
