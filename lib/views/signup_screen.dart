@@ -143,12 +143,12 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // اختيار طريقة التسجيل بأيقونات حديثة
+                            // اختيار طريقة التسجيل بأيقونات حديثة صحيحة
                             if (!_isLoginMode) ...[
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _buildGlassTab('يوزرنيم', Icons.alternate_route_rounded, 'username'),
+                                  _buildGlassTab('يوزرنيم', Icons.alternate_email_rounded, 'username'),
                                   const SizedBox(width: 8),
                                   _buildGlassTab('إيميل', Icons.mark_email_unread_rounded, 'email'),
                                   const SizedBox(width: 8),
