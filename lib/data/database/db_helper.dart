@@ -16,12 +16,7 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _createDB,
-    );
+    return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -44,12 +39,12 @@ class DatabaseHelper {
     return await db.insert('messages', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List>> getPendingMessages() async {
+  Future<List> getPendingMessages() async {
     final db = await instance.database;
     return await db.query('messages', where: 'status = ?', whereArgs: ['pending']);
   }
 
-  Future<List>> getMessagesForChat(String chatId) async {
+  Future<List> getMessagesForChat(String chatId) async {
     final db = await instance.database;
     return await db.query(
       'messages',
