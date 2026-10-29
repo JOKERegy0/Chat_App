@@ -3,9 +3,9 @@ from supabase import create_client, Client
 from fastapi import UploadFile, HTTPException
 import uuid
 
-# بيانات الاتصال بمشروع Supabase (تأخذهم من لوحة التحكم مجاناً)
-SUPABASE_URL = "https://your-supabase-project.supabase.co"
-SUPABASE_KEY = "your-supabase-anon-or-service-role-key"
+# بيانات الاتصال الحقيقية الخاصة بمشروعك في Supabase
+SUPABASE_URL = "https://dymrernfuorzmbcaaocy.supabase.co"
+SUPABASE_KEY = "sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
