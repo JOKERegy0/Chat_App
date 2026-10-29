@@ -22,7 +22,7 @@ class ChatRoomScreen extends StatefulWidget {
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final List> _messages = [];
+  final List _messages = [];
   WebSocketChannel? _channel;
   late String _currentUserId;
   bool _isConnected = false;
@@ -237,4 +237,3 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 }
- 
