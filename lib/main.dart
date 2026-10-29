@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'views/signup_screen.dart';
 import 'views/chats_list_screen.dart';
-import 'core/security/security_engine.dart'; // محرك الأمان الخاص بالتطبيق
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
