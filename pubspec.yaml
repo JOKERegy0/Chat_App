@@ -1,29 +1,37 @@
 name: kiura
-description: "A new Flutter project."
-publish_to: 'none'
+description: "A secure real-time messaging application with Clean Architecture."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.0
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-  crypto: ^3.0.6
-  file_picker: ^10.2.0
-  http: ^1.2.2
-  path: ^1.8.3
+  
+  # حزم قاعدة البيانات والتخزين
   sqflite: ^2.3.0
-  supabase_flutter: ^2.9.0
-  web_socket_channel: ^3.0.0
-  socket_io_client: ^2.0.0
+  path: ^1.8.3
+  
+  # حزم المصادقة والسيرفر
+  supabase_flutter: ^2.5.0
+  
+  # حزم اختيار الصور والوسائط (لإصلاح خطأ الحزمة المفقودة)
+  image_picker: ^1.0.7
+  
+  # حزم الاتصال الفوري والويب صكت
+  web_socket_channel: ^2.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
+
+  # أضف هنا الخطوط أو الأصول (Assets) إذا احتجت لاحقاً
+  # assets:
+  #   - assets/images/
