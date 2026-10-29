@@ -10,7 +10,7 @@ class SyncService {
     if (channel == null) return;
 
     try {
-      List> pendingMessages = await DatabaseHelper.instance.getPendingMessages();
+      List pendingMessages = await DatabaseHelper.instance.getPendingMessages();
 
       if (pendingMessages.isEmpty) return;
 
