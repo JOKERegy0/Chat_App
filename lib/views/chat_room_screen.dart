@@ -10,13 +10,13 @@ class ChatRoomScreen extends StatefulWidget {
   final String recipientName;
 
   const ChatRoomScreen({
-    Key? key,
+    super.key,
     required this.recipientId,
     required this.recipientName,
-  }) : super(key: key);
+  });
 
   @override
-  _ChatRoomScreenState createState() => _ChatRoomScreenState();
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
@@ -34,7 +34,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _loadLocalMessages();
   }
 
-  // تهيئة الاتصال بالـ WebSocket ومزامنة الرسائل المعلقة
   void _initWebSocketAndSync() {
     final session = Supabase.instance.client.auth.currentSession;
     final accessToken = session?.accessToken ?? '';
@@ -50,10 +49,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _isConnected = true;
       });
 
-      // أول ما يتم الاتصال، نقوم بمزامنة الرسائل المعلقة فوراً
       SyncService.instance.syncPendingMessages(_channel);
 
-      // الاستماع للرسائل الواردة
       _channel!.stream.listen(
         (data) {
           final decoded = jsonDecode(data);
@@ -81,7 +78,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
-  // تحميل الرسائل المخزنة محلياً مسبقاً (Local-First)
   Future<void> _loadLocalMessages() async {
     final localMsgs = await DatabaseHelper.instance.getMessagesForChat(widget.recipientId);
     setState(() {
@@ -90,7 +86,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     });
   }
 
-  // إرسال رسالة جديدة
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
@@ -113,7 +108,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       _messages.add(newMessage);
     });
 
-    // استخدام خدمة المزامنة المحلية لحفظها وإرسالها
     await SyncService.instance.handleOutgoingMessage(
       id: messageId,
       chatId: widget.recipientId,
