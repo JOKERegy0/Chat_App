@@ -12,7 +12,7 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final AuthService _authService = AuthService();
 
-  bool _isLoginMode = true; // البدء بتسجيل الدخول كوضع افتراضي سلس
+  bool _isLoginMode = true; 
   String _selectedMethod = 'username';
 
   final _usernameController = TextEditingController();
@@ -34,7 +34,6 @@ class _SignupScreenState extends State<SignupScreen> {
         } else {
           await _authService.signInWithUsername(username: identifier, password: password);
         }
-        // التوجيه سيتم تلقائياً عبر main.dart بفضل الـ StreamBuilder
       } else {
         if (_selectedMethod == 'username') {
           await _authService.signUpWithUsernameOnly(username: username, password: password);
@@ -85,7 +84,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // شعار التطبيق
                   const Text(
                     'KIURA',
                     textAlign: TextAlign.center,
@@ -104,33 +102,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // كبسولة الزجاج السائل الكبرى (Liquid Glass Card)
+                  // كبسولة الزجاج السائل الكبرى
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: BorderRadius.circular(36),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                      filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                       child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          // تأثير الزجاج السائل العاكس (شفاف مع لمعة خفيفة وحواف بيضاء مضيئة)
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white.withOpacity(0.12),
-                              Colors.white.withOpacity(0.04),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(32),
+                          color: Colors.white.withOpacity(0.07),
+                          borderRadius: BorderRadius.circular(36),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.22),
-                            width: 1.5,
+                            color: Colors.white.withOpacity(0.18),
+                            width: 1.2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 25,
+                              offset: const Offset(0, 12),
                             ),
                           ],
                         ),
@@ -138,17 +128,26 @@ class _SignupScreenState extends State<SignupScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (!_isLoginMode) ...[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildLiquidTab('يوزرنيم', Icons.alternate_email_rounded, 'username'),
-                                  const SizedBox(width: 8),
-                                  _buildLiquidTab('إيميل', Icons.mark_email_unread_rounded, 'email'),
-                                  const SizedBox(width: 8),
-                                  _buildLiquidTab('هاتف', Icons.phone_iphone_rounded, 'phone'),
-                                ],
+                              // شريط التبويب العائم المصمم بدقة مطابقة للرؤية الزجاجية السائلة
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.04),
+                                  borderRadius: BorderRadius.circular(28),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    _buildLiquidTab('يوزرنيم', Icons.alternate_email_rounded, 'username'),
+                                    _buildLiquidTab('إيميل', Icons.mark_email_unread_rounded, 'email'),
+                                    _buildLiquidTab('هاتف', Icons.phone_iphone_rounded, 'phone'),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 24),
                             ],
 
                             if (!_isLoginMode && _selectedMethod != 'phone') ...[
@@ -192,7 +191,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 gradient: const LinearGradient(
                                   colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
                                 ),
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
                                     color: const Color(0xFF0284C7).withOpacity(0.5),
@@ -208,7 +207,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   shadowColor: Colors.transparent,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                                 ),
                                 child: _isLoading
                                     ? const SizedBox(
@@ -242,11 +241,11 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // زر فيسبوك بالزجاج السائل
+                  // زر فيسبوك بزجاج سائل
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                       child: OutlinedButton.icon(
                         onPressed: _isLoading ? null : _handleFacebookLogin,
                         icon: const Icon(Icons.facebook_rounded, color: Color(0xFF60A5FA)),
@@ -255,7 +254,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: Colors.white.withOpacity(0.05),
                           side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         ),
                       ),
                     ),
@@ -292,37 +291,48 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // تبويب سائل يعكس أسلوب الكبسولات الزجاجية
+  // تأثير الكبسولة الزجاجية العائمة (Floating Liquid Pill) المطابق للصورة تماماً
   Widget _buildLiquidTab(String title, IconData icon, String method) {
     bool isSelected = _selectedMethod == method;
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _selectedMethod = method),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0284C7).withOpacity(0.85) : Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF38BDF8) : Colors.white.withOpacity(0.12),
-              width: isSelected ? 1.5 : 1,
-            ),
+            // الكبسولة النشطة تظهر بلون زجاجي حليبي عائم مضيء تماماً كالصورة المرجعية
+            color: isSelected ? Colors.white.withOpacity(0.22) : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+            border: isSelected
+                ? Border.all(color: Colors.white.withOpacity(0.35), width: 1.2)
+                : null,
             boxShadow: isSelected
-                ? [BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))]
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
                 : [],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: isSelected ? Colors.white : Colors.white60, size: 20),
+              Icon(
+                icon,
+                color: isSelected ? const Color(0xFF38BDF8) : Colors.white60,
+                size: 20,
+              ),
               const SizedBox(height: 4),
               Text(
                 title,
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.white70,
                   fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
             ],
@@ -350,15 +360,15 @@ class _SignupScreenState extends State<SignupScreen> {
         filled: true,
         fillColor: Colors.white.withOpacity(0.05),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
         ),
       ),
