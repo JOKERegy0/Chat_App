@@ -1,45 +1,56 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 import jwt
 import hashlib
 import datetime
 
-app = FastAPI(title="KIURA Auth & Identity Microservice", version="1.0.0")
+app = FastAPI(title="KIURA Secure Auth & Identity Microservice", version="1.0.0")
 
 # المفتاح السري الموحد لنواة KIURA
 SECRET_KEY = "KIURA_SECURE_DEV_SIGNATURE_2026_JOKER"
 ALGORITHM = "HS256"
+MIN_ALLOWED_VERSION = "1.0.0+1"
 
 class UserCredentials(BaseModel):
     username: str
     password: str
 
-# قاعدة بيانات مؤقتة للذاكرة (يمكن ربطها بـ PostgreSQL أو MongoDB لاحقاً حسب الخطة)
+# قاعدة بيانات مؤقتة للذاكرة
 fake_users_db = {}
 
+# دالة التحقق الإلزامي من إصدار التطبيق لمنع النسخ القديمة
+def verify_app_version(x_app_version: str = Header(default=None)):
+    if not x_app_version or x_app_version != MIN_ALLOWED_VERSION:
+        raise HTTPException(
+            status_code=403, 
+            detail="نسخة التطبيق قديمة أو غير مصرح لها. يرجى التحديث إلى أحدث إصدار آمن من KIURA."
+        )
+    return x_app_version
+
 @app.post("/api/v1/auth/register")
-async def register(credentials: UserCredentials):
+async def register(credentials: UserCredentials, app_version: str = Depends(verify_app_version)):
     if credentials.username in fake_users_db:
         raise HTTPException(status_code=400, detail="اسم المستخدم مسجل مسبقاً")
     
-    # تشفير كلمة المرور بأمان تام
+    if len(credentials.password) < 6:
+        raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 6 أحرف على الأقل لأسباب أمنية")
+    
     hashed_password = hashlib.sha256(credentials.password.encode()).hexdigest()
     fake_users_db[credentials.username] = hashed_password
     
     return {
         "status": "success",
-        "message": f"تم تسجيل المستخدم {credentials.username} بنجاح في نظام KIURA"
+        "message": f"تم تسجيل المستخدم {credentials.username} بنجاح في نظام KIURA الآمن"
     }
 
 @app.post("/api/v1/auth/login")
-async def login(credentials: UserCredentials):
+async def login(credentials: UserCredentials, app_version: str = Depends(verify_app_version)):
     stored_password = fake_users_db.get(credentials.username)
     hashed_input = hashlib.sha256(credentials.password.encode()).hexdigest()
     
     if not stored_password or stored_password != hashed_input:
         raise HTTPException(status_code=401, detail="بيانات الاعتماد غير صحيحة أو الحساب غير موجود")
     
-    # إصدار JWT Token مشفر وموثق للجلسة
     expiration = datetime.datetime.utcnow() + datetime.timedelta(days=7)
     token_payload = {
         "sub": credentials.username,
@@ -55,7 +66,7 @@ async def login(credentials: UserCredentials):
     }
 
 @app.get("/api/v1/auth/verify")
-async def verify_token(token: str):
+async def verify_token(token: str, app_version: str = Depends(verify_app_version)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return {"status": "valid", "username": payload.get("sub")}
