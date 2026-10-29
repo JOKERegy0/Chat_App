@@ -2,17 +2,17 @@ const WebSocket = require('ws');
 const url = require('url');
 const jwt = require('jsonwebtoken');
 
-// إعداد السيرفر على البورت 8080 أو المنفذ المتاح
+// إعداد السيرفر على المنفذ المتاح
 const PORT = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port: PORT });
 
-// المفتاح السري الموحد لنواة KIURA (المطابق لسيرفر المصادقة)
+// المفتاح السري الموحد لنواة KIURA
 const SECRET_KEY = "KIURA_SECURE_DEV_SIGNATURE_2026_JOKER";
 
-// النسخة الأدنى المسموح لها بالاتصال (لمنع النسخ القديمة غير الآمنة)
+// الحد الأدنى لإصدار التطبيق المقبول أمنياً (أي نسخة قديمة أقل ترفض فوراً)
 const MIN_ALLOWED_VERSION = '1.0.0+1';
 
-// تخزين العملاء المتصلين حالياً
+// خريطة لتخزين المستخدمين المتصلين حالياً
 const connectedClients = new Map();
 
 wss.on('connection', (ws, req) => {
@@ -21,46 +21,45 @@ wss.on('connection', (ws, req) => {
   const clientVersion = parameters.version;
   const authToken = parameters.token;
 
-  // 1. فحص إصدار التطبيق (رفض النسخ القديمة فوراً)
+  // 1. الحماية الصارمة ضد النسخ القديمة (Version Enforcement)
   if (!clientVersion || clientVersion !== MIN_ALLOWED_VERSION) {
     ws.send(JSON.stringify({ 
-      error: 'نسخة التطبيق قديمة وغير مصرح لها بالاتصال. يرجى التحديث إلى أحدث إصدار آمن من KIURA.' 
+      error: 'نسخة التطبيق قديمة وغير مصرح لها بالاتصال بالسيرفر. يرجى التحديث إلى أحدث إصدار آمن.' 
     }));
-    ws.close(4001, 'Unauthorized Version');
-    console.log(`[Security Alert] رفض اتصال من نسخة قديمة مرفوضة: ${clientVersion}`);
+    ws.close(4001, 'Unauthorized Outdated Version');
+    console.log(`[Security Block] تم رفض اتصال نسخة قديمة مرفوضة: ${clientVersion || 'غير معروف'}`);
     return;
   }
 
-  // 2. التحقق من صحة التوكن (JWT Authentication Check)
+  // 2. التحقق من وجود وصحة الـ Token (Authentication Check)
   if (!authToken) {
-    ws.send(JSON.stringify({ error: 'مطلوب رمز مصادقة صحيح (Auth Token Missing)' }));
-    ws.close(4003, 'Forbidden - No Token');
-    console.log('[Security Alert] رفض اتصال لعدم وجود توكن مصادقة.');
+    ws.send(JSON.stringify({ error: 'مطلوب رمز مصادقة صحيح للاتصال' }));
+    ws.close(4003, 'Forbidden - Missing Token');
+    console.log('[Security Block] رفض اتصال لعدم وجود توكن مصادقة.');
     return;
   }
 
   try {
     const decoded = jwt.verify(authToken, SECRET_KEY);
-    console.log(`[Auth Success] مستخدم موثوق متصل: ${decoded.sub} (User ID: ${userId})`);
+    console.log(`[Auth Verified] مستخدم موثوق متصل بأمان: ${decoded.sub} (ID: ${userId})`);
   } catch (err) {
-    ws.send(JSON.stringify({ error: 'رمز المصادقة غير صالح أو منتهي الصلاحية' }));
+    ws.send(JSON.stringify({ error: 'رمز المصادقة منتهي الصلاحية أو غير صالح' }));
     ws.close(4001, 'Invalid Token');
-    console.log(`[Security Alert] فشل التحقق من الـ Token للمستخدم: ${userId}`);
+    console.log(`[Security Block] فشل التحقق من الـ Token للمستخدم: ${userId}`);
     return;
   }
 
-  // تسجيل العميل في قائمة المتصلين
+  // تسجيل العميل ضمن المتصلين النشطين
   if (userId) {
     connectedClients.set(userId, ws);
   }
 
-  // استقبال الرسائل وتوجيهها للمستقبل لحظياً
+  // استقبال رسائل الدردشة وتوجيهها لحظياً
   ws.on('message', (messageData) => {
     try {
       const parsedMessage = JSON.parse(messageData);
-      console.log(`رسالة جديدة من ${userId} إلى ${parsedMessage.recipient_id}: ${parsedMessage.content || parsedMessage.message}`);
+      console.log(`رسالة من ${userId} إلى ${parsedMessage.recipient_id}: ${parsedMessage.content || parsedMessage.message}`);
 
-      // التحقق من وجود المستقبل وإرسال الرسالة له لو كان متصلاً
       const recipientWs = connectedClients.get(parsedMessage.recipient_id);
       if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
         recipientWs.send(JSON.stringify({
@@ -71,14 +70,12 @@ wss.on('connection', (ws, req) => {
           timestamp: parsedMessage.timestamp || new Date().toISOString()
         }));
 
-        // إرسال تأكيد وصول (Ack) للمرسل
         ws.send(JSON.stringify({
           type: 'ack',
           message_id: parsedMessage.id,
           status: 'sent'
         }));
       } else {
-        // لو المستقبل غير متصل، يتم تخزينها في قاعدة البيانات عبر النظام المحلي أو Supabase لاحقاً
         ws.send(JSON.stringify({
           type: 'ack',
           message_id: parsedMessage.id,
@@ -90,7 +87,7 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  // عند قطع الاتصال
+  // تنظيف القائمة عند قطع الاتصال
   ws.on('close', () => {
     if (userId) {
       connectedClients.delete(userId);
@@ -99,4 +96,4 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log(`🚀 KIURA Secure WebSocket Chat Server is running on port ${PORT}`);
+console.log(`🚀 KIURA Secure WebSocket Chat Server is running and protected on port ${PORT}`);
