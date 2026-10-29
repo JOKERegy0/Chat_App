@@ -237,3 +237,4 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 }
+ 
