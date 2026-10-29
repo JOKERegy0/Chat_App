@@ -4,11 +4,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'views/signup_screen.dart';
 import 'views/chats_list_screen.dart';
-// استدعاء شاشة التسجيل اللي عملناها
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,28 +16,42 @@ void main() async {
     anonKey: 'sb_publishable_OZRyylmfNPqP99y7PlT32Q_s-0YyJ9z',
   );
 
-  final session = Supabase.instance.client.auth.currentSession;
-
-  runApp(MyApp(isLoggedIn: session != null));
+  runApp(const KiuraApp());
 }
 
-class MyApp extends StatelessWidget {
-  final bool isLoggedIn;
-  const MyApp({super.key, required this.isLoggedIn});
+// ==========================================
+// 1. التطبيق الرئيسي مع التوجيه الذكي الفوري
+// ==========================================
+class KiuraApp extends StatelessWidget {
+  const KiuraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'KIURA',
-      home: isLoggedIn ? ChatsListScreen() : SignupScreen(),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        useMaterial3: true,
+      ),
+      // StreamBuilder يراقب تغيرات الجلسة وينقل الشاشة فوراً عند تسجيل الدخول
+      home: StreamBuilder<AuthState>(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
+        builder: (context, snapshot) {
+          final session = Supabase.instance.client.auth.currentSession;
+          if (session != null) {
+            return const ChatsListScreen();
+          }
+          return const SignupScreen();
+        },
+      ),
     );
   }
 }
 
-
 // ==========================================
-// 1. نظام قاعدة البيانات المحلية المتقدم (Database Helper)
+// 2. نظام قاعدة البيانات المحلية المتقدم (Database Helper)
 // ==========================================
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -141,29 +153,8 @@ class DatabaseHelper {
 }
 
 // ==========================================
-// 2. واجهة التطبيق الرئيسية (UI)
+// 3. شاشة المحادثة التجريبية (ChatScreen)
 // ==========================================
-class KiuraApp extends StatelessWidget {
-  const KiuraApp({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'KIURA',
-      theme: ThemeData(
-        primarySwatch: Colors.indigo,
-        useMaterial3: true,
-      ),
-      home: const ChatScreen(
-        currentUserId: 'user_joker',
-        recipientId: 'user_friend',
-        chatId: 'chat_joker_friend',
-      ),
-    );
-  }
-}
-
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String recipientId;
@@ -478,10 +469,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: TextField(
                       controller: _controller,
                       textDirection: TextDirection.rtl,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: 'اكتب رسالتك في KIURA...',
-                        border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
