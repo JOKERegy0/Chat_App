@@ -1,5 +1,5 @@
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -7,9 +7,9 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
-  asyncDatabase() async {
+  Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('kiura_secure.db');
+    _database = await _initDB('kiura_chat.db');
     return _database!;
   }
 
@@ -25,47 +25,83 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    // جدول الرسائل المحلية المشفرة
+    // جدول الرسائل
     await db.execute('''
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
-        sender_id TEXT NOT NULL,
-        recipient_id TEXT NOT NULL,
-        content TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        status TEXT NOT NULL
+        chat_id TEXT,
+        sender_id TEXT,
+        recipient_id TEXT,
+        content TEXT,
+        type TEXT,
+        status TEXT,
+        timestamp TEXT
       )
     ''');
 
-    // جدول المستخدمين وجهات الاتصال
+    // جدول المحادثات
     await db.execute('''
-      CREATE TABLE users (
+      CREATE TABLE chats (
         id TEXT PRIMARY KEY,
-        username TEXT NOT NULL,
-        status_message TEXT
+        name TEXT,
+        avatar TEXT,
+        last_message TEXT,
+        updated_at TEXT
       )
     ''');
   }
 
-  // حفظ رسالة محلياً
-  Future<void> insertMessage(Map<String, dynamic> row) async {
-    final db = await asyncDatabase();
-    await db.insert('messages', row, conflictAlgorithm: ConflictAlgorithm.replace);
+  // إدراج رسالة جديدة
+  Future<int> insertMessage(Map<String, dynamic> row) async {
+    final db = await database;
+    return await db.insert('messages', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  // استرجاع رسائل محادثة معينة
-  Future<List<Map<String, dynamic>>> getMessages(String peerId) async {
-    final db = await asyncDatabase();
+  // جلب الرسائل الخاصة بمحادثة معينة
+  Future<List<Map<String, dynamic>>> getMessages(String chatId) async {
+    final db = await database;
     return await db.query(
       'messages',
-      where: 'sender_id = ? OR recipient_id = ?',
-      whereArgs: [peerId, peerId],
-      orderBy: 'timestamp ASC',
+      where: 'chat_id = ?',
+      whereArgs: [chatId],
+      orderBy: 'timestamp DESC',
     );
   }
 
+  // جلب الرسائل التي لم يتم إرسالها (Pending)
+  Future<List<Map<String, dynamic>>> getPendingMessages() async {
+    final db = await database;
+    return await db.query(
+      'messages',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+    );
+  }
+
+  // تحديث حالة الرسالة (sent, delivered, read)
+  Future<int> updateMessageStatus(String messageId, String status) async {
+    final db = await database;
+    return await db.update(
+      'messages',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
+  // إدراج أو تحديث محادثة في القائمة
+  Future<int> insertOrUpdateChat(Map<String, dynamic> row) async {
+    final db = await database;
+    return await db.insert(
+      'chats',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // إغلاق قاعدة البيانات
   Future close() async {
-    final db = await asyncDatabase();
+    final db = await database;
     db.close();
   }
 }
