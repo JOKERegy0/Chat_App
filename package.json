@@ -1,6 +1,13 @@
 {
+  "name": "kiura-chat-server",
+  "version": "1.0.0",
+  "description": "Secure Real-time WebSocket Chat Server for KIURA",
+  "main": "chat_server.js",
+  "scripts": {
+    "start": "node chat_server.js"
+  },
   "dependencies": {
-    "ws": "^8.22.0",
-    "ioredis": "^5.3.2"
+    "ws": "^8.16.0",
+    "jsonwebtoken": "^9.0.2"
   }
 }
