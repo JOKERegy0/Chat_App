@@ -16,6 +16,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   List _allUsers = [];
   List _filteredUsers = [];
   bool _isLoading = false;
+  String _errorMessage = '';
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -28,21 +29,30 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   Future<void> _fetchUsers() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       
+      // جلب الحسابات من جدول profiles وتأمين الاستعلام
       final response = await Supabase.instance.client
           .from('profiles')
-          .select()
-          .neq('id', currentUserId ?? '');
+          .select();
 
       setState(() {
-        _allUsers = response is List ? response : [];
+        if (response is List) {
+          // استثناء المستخدم الحالي من القائمة الظاهرة للبحث
+          _allUsers = response.where((user) => user['id'] != currentUserId).toList();
+        } else {
+          _allUsers = [];
+        }
         _filteredUsers = _allUsers;
       });
     } catch (e) {
+      setState(() {
+        _errorMessage = 'خطأ في الاتصال بقاعدة البيانات: $e';
+      });
       print('Error fetching users: $e');
     } finally {
       setState(() {
@@ -52,11 +62,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.toLowerCase();
+    final query = _searchController.text.toLowerCase().trim();
     setState(() {
       _filteredUsers = _allUsers.where((user) {
-        final username = user['username']?.toLowerCase() ?? '';
-        final email = user['email']?.toLowerCase() ?? '';
+        final username = (user['username'] ?? '').toString().toLowerCase();
+        final email = (user['email'] ?? '').toString().toLowerCase();
         return username.contains(query) || email.contains(query);
       }).toList();
     });
@@ -112,15 +122,26 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               ),
             ),
           ),
+          if (_errorMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
                 : _filteredUsers.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
-                          'لا توجد حسابات مطابقة للبحث.\nابحث بالاسم لبدء محادثة جديدة!',
+                          _allUsers.isEmpty 
+                              ? 'لا توجد حسابات مسجلة في قاعدة البيانات حالياً.\nتأكد من إنشاء ملف تعريف (Profile) لحسابك.'
+                              : 'لا توجد نتائج مطابقة لبحثك.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white54, fontSize: 14),
+                          style: const TextStyle(color: Colors.white54, fontSize: 14),
                         ),
                       )
                     : ListView.builder(
