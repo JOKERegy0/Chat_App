@@ -14,12 +14,15 @@ class ChatsListScreen extends StatefulWidget {
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
   List> _chats = [];
+  List> _filteredChats = [];
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadChats();
+    _searchController.addListener(_filterChats);
   }
 
   Future<void> _loadChats() async {
@@ -28,30 +31,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     });
 
     try {
-      // جلب المحادثات أو المستخدمين من قاعدة البيانات المحلية أو Supabase
-      final localChats = await DatabaseHelper.instance.getPendingMessages();
+      // استدعاء الحسابات والمحادثات الحقيقية من قاعدة البيانات المحلية أو Supabase
+      final localMsgs = await DatabaseHelper.instance.getPendingMessages();
       
-      // محادثات تجريبية افتراضية لضمان ظهور واجهة غنية في حال كانت القائمة فارغة
-      _chats = [
-        {
-          'id': 'chat_001',
-          'recipient_id': 'user_001',
-          'name': 'أحمد (مطور KIURA)',
-          'last_message': 'تم تأمين الـ WebSocket بنجاح يا هندسة 🚀',
-          'time': '11:15 ص',
-          'unread_count': 2,
-          'is_online': true,
-        },
-        {
-          'id': 'chat_002',
-          'recipient_id': 'user_002',
-          'name': 'محمود',
-          'last_message': 'جاهز لتجربة النظام المحلي?',
-          'time': 'أمس',
-          'unread_count': 0,
-          'is_online': false,
-        },
-      ];
+      // هنا نقدر نربط جدول المستخدمين لاحقاً، حالياً بنترك القائمة جاهزة لاستقبال البيانات الحقيقية
+      setState(() {
+        _chats = []; // قائمة فارغة لتعبئتها بالحسابات الحقيقية لاحقاً
+        _filteredChats = _chats;
+      });
     } catch (e) {
       print('Error loading chats: $e');
     }
@@ -59,6 +46,22 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     setState(() {
       _isLoading = false;
     });
+  }
+
+  void _filterChats() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredChats = _chats.where((chat) {
+        final name = chat['name']?.toLowerCase() ?? '';
+        return name.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -74,10 +77,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.white70),
-            onPressed: () {},
-          ),
-          IconButton(
             icon: const Icon(Icons.person, color: Colors.white70),
             onPressed: () {
               Navigator.push(
@@ -88,114 +87,104 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-          : ListView.builder(
-              itemCount: _chats.length,
-              itemBuilder: (context, index) {
-                final chat = _chats[index];
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundColor: const Color(0xFF3B82F6),
-                          child: Text(
-                            chat['name'][0],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        if (chat['is_online'] == true)
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              width: 14,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF1E293B), width: 2),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    title: Text(
-                      chat['name'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        chat['last_message'] ?? '',
-                        style: const TextStyle(color: Colors.white54, fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          chat['time'] ?? '',
-                          style: const TextStyle(color: Colors.white38, fontSize: 11),
-                        ),
-                        const SizedBox(height: 6),
-                        if ((chat['unread_count'] ?? 0) > 0)
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF3B82F6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '${chat['unread_count']}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatRoomScreen(
-                            chatId: chat['id'] ?? 'chat_default',
-                            recipientId: chat['recipient_id'] ?? 'user_default',
-                            recipientName: chat['name'] ?? 'مستخدم',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
+      body: Column(
+        children: [
+          // شريط البحث المباشر (جاهز للتفعيل والتصفية)
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'بحث في المحادثات والحسابات...',
+                hintStyle: const TextStyle(color: Colors.white54),
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                filled: true,
+                fillColor: const Color(0xFF1E293B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
             ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
+                : _filteredChats.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'لا توجد محادثات حالياً.\nاضغط على زر الإضافة لبدء محادثة جديدة!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54, fontSize: 14),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filteredChats.length,
+                        itemBuilder: (context, index) {
+                          final chat = _filteredChats[index];
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              leading: CircleAvatar(
+                                radius: 26,
+                                backgroundColor: const Color(0xFF3B82F6),
+                                child: Text(
+                                  chat['name'] != null && chat['name'].isNotEmpty ? chat['name'][0] : '?',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                chat['name'] ?? 'مستخدم',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  chat['last_message'] ?? '',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ChatRoomScreen(
+                                      chatId: chat['id'] ?? 'chat_default',
+                                      recipientId: chat['recipient_id'] ?? 'user_default',
+                                      recipientName: chat['name'] ?? 'مستخدم',
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF3B82F6),
-        child: const Icon(Icons.chat, color: Colors.white),
+        child: const Icon(Icons.person_add, color: Colors.white),
         onPressed: () {
+          // زر إضافة حساب جديد / بحث عن مستخدمين لبدء الشات
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const StatusesScreen()),
