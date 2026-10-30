@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_room_screen.dart';
 import 'profile_screen.dart';
-import 'statuses_screen.dart';
-import '../core/constants/app_config.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -13,8 +11,8 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List _allUsers = [];
-  List _filteredUsers = [];
+  List> _allUsers = [];
+  List> _filteredUsers = [];
   bool _isLoading = false;
   String _errorMessage = '';
   final TextEditingController _searchController = TextEditingController();
@@ -35,7 +33,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     try {
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       
-      // جلب الحسابات من جدول profiles وتأمين الاستعلام
+      // جلب الحسابات مباشرة من جدول profiles
       final response = await Supabase.instance.client
           .from('profiles')
           .select();
@@ -43,15 +41,16 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       setState(() {
         if (response is List) {
           // استثناء المستخدم الحالي من القائمة الظاهرة للبحث
-          _allUsers = response.where((user) => user['id'] != currentUserId).toList();
+          _allUsers = List>.from(response);
+          _filteredUsers = _allUsers.where((user) => user['id'] != currentUserId).toList();
         } else {
           _allUsers = [];
+          _filteredUsers = [];
         }
-        _filteredUsers = _allUsers;
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'خطأ في الاتصال بقاعدة البيانات: $e';
+        _errorMessage = 'خطأ في جلب الحسابات: $e';
       });
       print('Error fetching users: $e');
     } finally {
@@ -63,8 +62,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
   void _onSearchChanged() {
     final query = _searchController.text.toLowerCase().trim();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
     setState(() {
       _filteredUsers = _allUsers.where((user) {
+        if (user['id'] == currentUserId) return false;
         final username = (user['username'] ?? '').toString().toLowerCase();
         final email = (user['email'] ?? '').toString().toLowerCase();
         return username.contains(query) || email.contains(query);
@@ -83,9 +85,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: Text(
-          '${AppConfig.appName} Secure Messenger',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: const Text(
+          'KIURA Secure Messenger',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
@@ -97,6 +99,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
               );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            onPressed: () async {
+              await Supabase.instance.client.auth.signOut();
             },
           ),
         ],
@@ -138,7 +146,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                     ? Center(
                         child: Text(
                           _allUsers.isEmpty 
-                              ? 'لا توجد حسابات مسجلة في قاعدة البيانات حالياً.\nتأكد من إنشاء ملف تعريف (Profile) لحسابك.'
+                              ? 'لا توجد حسابات مسجلة في قاعدة البيانات حالياً.'
                               : 'لا توجد نتائج مطابقة لبحثك.',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white54, fontSize: 14),
@@ -199,7 +207,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 );
                               },
                             ),
-                          );
+          );
                         },
                       ),
           ),
