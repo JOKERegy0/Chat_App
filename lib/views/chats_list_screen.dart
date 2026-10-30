@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_room_screen.dart';
 import 'profile_screen.dart';
 import 'statuses_screen.dart';
-import '../data/database/db_helper.dart';
+import '../core/constants/app_config.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -13,43 +13,52 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List _chats = [];
-  List _filteredChats = [];
-  bool _isLoading = true;
+  List> _allUsers = [];
+  List> _filteredUsers = [];
+  bool _isLoading = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadChats();
-    _searchController.addListener(_filterChats);
+    _fetchUsers();
+    _searchController.addListener(_onSearchChanged);
   }
 
-  Future<void> _loadChats() async {
+  // دالة لجلب المستخدمين الحقيقيين من جدول الـ Profiles في Supabase للبحث والإضافة
+  Future<void> _fetchUsers() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .neq('id', currentUserId ?? ''); // استثناء المستخدم الحالي من القائمة
+
       setState(() {
-        _chats = [];
-        _filteredChats = _chats;
+        _allUsers = List>.from(response);
+        _filteredUsers = _allUsers;
       });
     } catch (e) {
-      print('Error loading chats: $e');
+      print('Error fetching users: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
-  void _filterChats() {
+  void _onSearchChanged() {
     final query = _searchController.text.toLowerCase();
     setState(() {
-      _filteredChats = _chats.where((chat) {
-        final name = chat['name']?.toLowerCase() ?? '';
-        return name.contains(query);
+      _filteredUsers = _allUsers.where((user) {
+        final username = user['username']?.toLowerCase() ?? '';
+        final email = user['email']?.toLowerCase() ?? '';
+        return username.contains(query) || email.contains(query);
       }).toList();
     });
   }
@@ -65,9 +74,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text(
-          'KIURA Secure Messenger',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          '${AppConfig.appName} Secure Messenger',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
@@ -85,13 +94,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       ),
       body: Column(
         children: [
+          // شريط البحث الحقيقي عن الحسابات
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
               controller: _searchController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: 'بحث في المحادثات والحسابات...',
+                hintText: 'ابحث عن اسم المستخدم أو البريد...',
                 hintStyle: const TextStyle(color: Colors.white54),
                 prefixIcon: const Icon(Icons.search, color: Colors.white54),
                 filled: true,
@@ -107,18 +117,20 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-                : _filteredChats.isEmpty
+                : _filteredUsers.isEmpty
                     ? const Center(
                         child: Text(
-                          'لا توجد محادثات حالياً.\nاضغط على زر الإضافة لبدء محادثة جديدة!',
+                          'لا توجد حسابات مطابقة للبحث.\nابحث بالاسم لبدء محادثة جديدة!',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white54, fontSize: 14),
                         ),
                       )
                     : ListView.builder(
-                        itemCount: _filteredChats.length,
+                        itemCount: _filteredUsers.length,
                         itemBuilder: (context, index) {
-                          final chat = _filteredChats[index];
+                          final user = _filteredUsers[index];
+                          final username = user['username'] ?? user['email'] ?? 'مستخدم KIURA';
+                          
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
@@ -131,7 +143,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 radius: 26,
                                 backgroundColor: const Color(0xFF3B82F6),
                                 child: Text(
-                                  chat['name'] != null && chat['name'].isNotEmpty ? chat['name'][0] : '?',
+                                  username.isNotEmpty ? username[0].toUpperCase() : '?',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 20,
@@ -140,30 +152,30 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 ),
                               ),
                               title: Text(
-                                chat['name'] ?? 'مستخدم',
+                                username,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 6),
+                              subtitle: const Padding(
+                                padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  chat['last_message'] ?? '',
-                                  style: const TextStyle(color: Colors.white54, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  'انقر للبدء في مراسلة آمنة 🔒',
+                                  style: TextStyle(color: Colors.white54, fontSize: 12),
                                 ),
                               ),
+                              trailing: const Icon(Icons.chat_bubble_outline, color: Color(0xFF3B82F6)),
                               onTap: () {
+                                // الانتقال المباشر لغرفة الشات مع المستخدم المحدد مع تمرير الـ IDs الحقيقية
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ChatRoomScreen(
-                                      chatId: chat['id'] ?? 'chat_default',
-                                      recipientId: chat['recipient_id'] ?? 'user_default',
-                                      recipientName: chat['name'] ?? 'مستخدم',
+                                      chatId: 'chat_${user['id']}',
+                                      recipientId: user['id'],
+                                      recipientName: username,
                                     ),
                                   ),
                                 );
@@ -177,13 +189,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF3B82F6),
-        child: const Icon(Icons.person_add, color: Colors.white),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const StatusesScreen()),
-          );
-        },
+        child: const Icon(Icons.refresh, color: Colors.white),
+        onPressed: _fetchUsers, // زر لتحديث قائمة المستخدمين وجلبهم من السيرفر
       ),
     );
   }
