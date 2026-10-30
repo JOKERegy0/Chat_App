@@ -7,11 +7,13 @@ import '../services/sync_service.dart';
 import '../data/database/db_helper.dart';
 
 class ChatRoomScreen extends StatefulWidget {
+  final String chatId;
   final String recipientId;
   final String recipientName;
 
   const ChatRoomScreen({
     super.key,
+    required this.chatId,
     required this.recipientId,
     required this.recipientName,
   });
@@ -80,7 +82,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _loadLocalMessages() async {
-    final localMsgs = await DatabaseHelper.instance.getMessagesForChat(widget.recipientId);
+    final localMsgs = await DatabaseHelper.instance.getMessagesForChat(widget.chatId);
     setState(() {
       _messages.clear();
       _messages.addAll(localMsgs);
@@ -96,7 +98,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     final newMessage = {
       'id': messageId,
-      'chat_id': widget.recipientId,
+      'chat_id': widget.chatId,
       'sender_id': _currentUserId,
       'recipient_id': widget.recipientId,
       'content': messageContent,
@@ -111,7 +113,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     await SyncService.instance.handleOutgoingMessage(
       id: messageId,
-      chatId: widget.recipientId,
+      chatId: widget.chatId,
       senderId: _currentUserId,
       recipientId: widget.recipientId,
       content: messageContent,
@@ -132,7 +134,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(widget.recipientName),
+            Text(widget.recipientName, style: const TextStyle(color: Colors.white)),
             const SizedBox(width: 8),
             Container(
               width: 10,
