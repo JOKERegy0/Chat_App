@@ -13,8 +13,8 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List> _chats = [];
-  List> _filteredChats = [];
+  List _chats = [];
+  List _filteredChats = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
 
@@ -31,12 +31,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     });
 
     try {
-      // استدعاء الحسابات والمحادثات الحقيقية من قاعدة البيانات المحلية أو Supabase
-      final localMsgs = await DatabaseHelper.instance.getPendingMessages();
-      
-      // هنا نقدر نربط جدول المستخدمين لاحقاً، حالياً بنترك القائمة جاهزة لاستقبال البيانات الحقيقية
       setState(() {
-        _chats = []; // قائمة فارغة لتعبئتها بالحسابات الحقيقية لاحقاً
+        _chats = [];
         _filteredChats = _chats;
       });
     } catch (e) {
@@ -89,7 +85,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       ),
       body: Column(
         children: [
-          // شريط البحث المباشر (جاهز للتفعيل والتصفية)
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -184,7 +179,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         backgroundColor: const Color(0xFF3B82F6),
         child: const Icon(Icons.person_add, color: Colors.white),
         onPressed: () {
-          // زر إضافة حساب جديد / بحث عن مستخدمين لبدء الشات
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const StatusesScreen()),
