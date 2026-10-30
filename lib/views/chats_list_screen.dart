@@ -11,8 +11,8 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List> _allUsers = [];
-  List> _filteredUsers = [];
+  List _allUsers = [];
+  List _filteredUsers = [];
   bool _isLoading = false;
   String _errorMessage = '';
   final TextEditingController _searchController = TextEditingController();
@@ -40,8 +40,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
       setState(() {
         if (response is List) {
-          // استثناء المستخدم الحالي من القائمة الظاهرة للبحث
-          _allUsers = List>.from(response);
+          _allUsers = response;
           _filteredUsers = _allUsers.where((user) => user['id'] != currentUserId).toList();
         } else {
           _allUsers = [];
@@ -207,7 +206,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 );
                               },
                             ),
-          );
+                          );
                         },
                       ),
           ),
