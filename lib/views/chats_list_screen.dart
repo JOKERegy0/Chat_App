@@ -13,8 +13,8 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List> _allUsers = [];
-  List> _filteredUsers = [];
+  List _allUsers = [];
+  List _filteredUsers = [];
   bool _isLoading = false;
   final TextEditingController _searchController = TextEditingController();
 
@@ -25,7 +25,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     _searchController.addListener(_onSearchChanged);
   }
 
-  // دالة لجلب المستخدمين الحقيقيين من جدول الـ Profiles في Supabase للبحث والإضافة
   Future<void> _fetchUsers() async {
     setState(() {
       _isLoading = true;
@@ -37,10 +36,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       final response = await Supabase.instance.client
           .from('profiles')
           .select()
-          .neq('id', currentUserId ?? ''); // استثناء المستخدم الحالي من القائمة
+          .neq('id', currentUserId ?? '');
 
       setState(() {
-        _allUsers = List>.from(response);
+        _allUsers = response is List ? response : [];
         _filteredUsers = _allUsers;
       });
     } catch (e) {
@@ -94,7 +93,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       ),
       body: Column(
         children: [
-          // شريط البحث الحقيقي عن الحسابات
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -160,7 +158,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 ),
                               ),
                               subtitle: const Padding(
-                                padding: const EdgeInsets.only(top: 4),
+                                padding: EdgeInsets.only(top: 4),
                                 child: Text(
                                   'انقر للبدء في مراسلة آمنة 🔒',
                                   style: TextStyle(color: Colors.white54, fontSize: 12),
@@ -168,7 +166,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                               ),
                               trailing: const Icon(Icons.chat_bubble_outline, color: Color(0xFF3B82F6)),
                               onTap: () {
-                                // الانتقال المباشر لغرفة الشات مع المستخدم المحدد مع تمرير الـ IDs الحقيقية
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -190,7 +187,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF3B82F6),
         child: const Icon(Icons.refresh, color: Colors.white),
-        onPressed: _fetchUsers, // زر لتحديث قائمة المستخدمين وجلبهم من السيرفر
+        onPressed: _fetchUsers,
       ),
     );
   }
