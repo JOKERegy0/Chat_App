@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:kiura/services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -10,8 +10,6 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final AuthService _authService = AuthService();
-
   bool _isLoginMode = true; 
   String _selectedMethod = 'username';
 
@@ -29,40 +27,104 @@ class _SignupScreenState extends State<SignupScreen> {
       final identifier = _identifierController.text.trim();
 
       if (_isLoginMode) {
-        if (identifier.contains('@') || identifier.contains(RegExp(r'^[0-9+]+$'))) {
-          await _authService.signInDirect(emailOrPhone: identifier, password: password);
+        // --- وضع تسجيل الدخول ---
+        if (identifier.contains('@')) {
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: identifier,
+            password: password,
+          );
         } else {
-          await _authService.signInWithUsername(username: identifier, password: password);
+          // البحث عن البريد الإلكتروني المرتبط باسم المستخدم في جدول profiles
+          final profileResponse = await Supabase.instance.client
+              .from('profiles')
+              .select('email')
+              .eq('username', identifier)
+              .maybeSingle();
+
+          if (profileResponse == null || profileResponse['email'] == null) {
+            throw 'اسم المستخدم غير مسجل لدينا!';
+          }
+
+          final email = profileResponse['email'];
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: email,
+            password: password,
+          );
         }
       } else {
-        if (_selectedMethod == 'username') {
-          await _authService.signUpWithUsernameOnly(username: username, password: password);
-        } else if (_selectedMethod == 'email') {
-          await _authService.signUpWithEmail(email: identifier, password: password, username: username);
+        // --- وضع إنشاء حساب جديد ---
+        String emailToUse = '';
+        String usernameToUse = username;
+
+        if (_selectedMethod == 'email') {
+          emailToUse = identifier;
+          if (emailToUse.isEmpty || !emailToUse.contains('@')) {
+            throw 'يرجى إدخال بريد إلكتروني صحيح وصالح.';
+          }
+        } else if (_selectedMethod == 'username') {
+          if (username.isEmpty) {
+            throw 'يرجى إدخال اسم المستخدم.';
+          }
+          emailToUse = '${username.toLowerCase()}_kiura@kiura.app';
+          usernameToUse = username;
         } else if (_selectedMethod == 'phone') {
-          await _authService.signUpWithPhone(phone: identifier, password: password, username: username.isEmpty ? null : username);
+          if (identifier.isEmpty) {
+            throw 'يرجى إدخال رقم الهاتف.';
+          }
+          emailToUse = '${identifier.replaceAll(RegExp(r'[^0-9]'), '')}@kiura.phone';
+          usernameToUse = username.isEmpty ? identifier : username;
+        }
+
+        if (password.length < 6) {
+          throw 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+        }
+
+        // إرسال البيانات مباشرة إلى سوبابيس
+        await Supabase.instance.client.auth.signUp(
+          email: emailToUse,
+          password: password,
+          data: {'username': usernameToUse.isEmpty ? emailToUse.split('@')[0] : usernameToUse},
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم إنشاء الحساب بنجاح! 🎉'), backgroundColor: Colors.green),
+          );
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.redAccent),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleFacebookLogin() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithFacebook();
+      // يمكنك تفعيل تسجيل فيسبوك لاحقاً عبر Supabase Auth
+      throw 'تسجيل الدخول فيسبوك قيد التجهيز';
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ فيسبوك: $e'), backgroundColor: Colors.redAccent),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ فيسبوك: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -128,7 +190,6 @@ class _SignupScreenState extends State<SignupScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (!_isLoginMode) ...[
-                              // شريط التبويب العائم المصمم بدقة مطابقة للرؤية الزجاجية السائلة
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
@@ -228,7 +289,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // فاصل
                   Row(
                     children: [
                       const Expanded(child: Divider(color: Colors.white24)),
@@ -241,7 +301,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // زر فيسبوك بزجاج سائل
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
@@ -261,7 +320,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // زر التبديل بين الدخول وإنشاء حساب
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -291,7 +349,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // تأثير الكبسولة الزجاجية العائمة (Floating Liquid Pill) المطابق للصورة تماماً
   Widget _buildLiquidTab(String title, IconData icon, String method) {
     bool isSelected = _selectedMethod == method;
     return Expanded(
@@ -302,7 +359,6 @@ class _SignupScreenState extends State<SignupScreen> {
           curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           decoration: BoxDecoration(
-            // الكبسولة النشطة تظهر بلون زجاجي حليبي عائم مضيء تماماً كالصورة المرجعية
             color: isSelected ? Colors.white.withOpacity(0.22) : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
             border: isSelected
@@ -342,7 +398,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // حقل إدخال زجاجي سائل متطور
   Widget _buildLiquidTextField({
     required TextEditingController controller,
     required String label,
