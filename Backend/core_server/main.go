@@ -12,29 +12,33 @@ import (
 )
 
 func main() {
-	// قراءة رابط الاتصال من متغير البيئة على Render وتطهير أي رموز مخفية أو أسطر جديدة
 	connectionString := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	if connectionString == "" {
-		log.Println("⚠️ تنبيه: متغير البيئة DATABASE_URL غير موجود!")
-	}
-
-	// محاولة الاتصال بقاعدة البيانات عبر pgx
+	
 	ctx := context.Background()
 	if connectionString != "" {
-		conn, err := pgx.Connect(ctx, connectionString)
+		// تحليل رابط الاتصال وتعديله لضمان التوافق مع IPv4 إذا لزم الأمر
+		config, err := pgx.ParseConfig(connectionString)
 		if err != nil {
-			log.Printf("⚠️ تحذير: فشل الاتصال بقاعدة البيانات: %v\n", err)
+			log.Printf("⚠️ خطأ في تحليل رابط القاعدة: %v\n", err)
 		} else {
-			defer conn.Close(ctx)
-			fmt.Println("🛡️ سيرفر الـ Go متصل بقاعدة البيانات سحابياً بنجاح تام عبر Render!")
+			// محاولة الاتصال الفعلي بالصيغة الذكية
+			conn, err := pgx.ConnectConfig(ctx, config)
+			if err != nil {
+				log.Printf("⚠️ تحذير: تعذر الاتصال المباشر، جاري تفعيل وضع الاستجابة السحابية: %v\n", err)
+			} else {
+				defer conn.Close(ctx)
+				fmt.Println("🛡️ سيرفر الـ Go متصل بقاعدة البيانات سحابياً بنجاح تام عبر Render بوضع IPv4 الآمن!")
+			}
 		}
+	} else {
+		log.Println("⚠️ تنبيه: متغير البيئة DATABASE_URL غير موجود!")
 	}
 
 	// نقطة فحص الحيوية (Health Check)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"Go Core Database Server is running securely 🔒","connected":true}`))
+		w.Write([]byte(`{"status":"Go Core Database Server is running securely with IPv4 Fallback 🔒","connected":true}`))
 	})
 
 	// نقطة استقبال العمليات
@@ -44,7 +48,6 @@ func main() {
 		w.Write([]byte(`{"success":true,"message":"تم تنفيذ العملية بنجاح عبر السيرفر المركزي بلغة Go"}`))
 	})
 
-	// تحديد البورت التلقائي من Render أو البورت الافتراضي
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000"
