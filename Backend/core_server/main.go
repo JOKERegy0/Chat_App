@@ -6,22 +6,28 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
 func main() {
-	// الرابط الصحيح لقاعدة البيانات مهيأ بكلمة المرور الخاصة بك
-	connectionString := "postgresql://postgres:KIURASERVEREGYJOKERFORME2026112@db.dymrernfuorzmbcaaocy.supabase.co:5432/postgres"
+	// قراءة رابط الاتصال من متغير البيئة على Render وتطهير أي رموز مخفية أو أسطر جديدة
+	connectionString := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if connectionString == "" {
+		log.Println("⚠️ تنبيه: متغير البيئة DATABASE_URL غير موجود!")
+	}
 
 	// محاولة الاتصال بقاعدة البيانات عبر pgx
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, connectionString)
-	if err != nil {
-		log.Printf("⚠️ تحذير: فشل الاتصال بقاعدة البيانات: %v\n", err)
-	} else {
-		defer conn.Close(ctx)
-		fmt.Println("🛡️ سيرفر الـ Go متصل بقاعدة البيانات سحابياً بنجاح تام عبر Render!")
+	if connectionString != "" {
+		conn, err := pgx.Connect(ctx, connectionString)
+		if err != nil {
+			log.Printf("⚠️ تحذير: فشل الاتصال بقاعدة البيانات: %v\n", err)
+		} else {
+			defer conn.Close(ctx)
+			fmt.Println("🛡️ سيرفر الـ Go متصل بقاعدة البيانات سحابياً بنجاح تام عبر Render!")
+		}
 	}
 
 	// نقطة فحص الحيوية (Health Check)
