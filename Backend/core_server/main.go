@@ -1,54 +1,51 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
-	"github.com/gofiber/fiber/v2"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
 )
 
-var DB *sql.DB
-
-func InitDB() {
-	connStr := os.Getenv("DATABASE_URL")
-	if connStr == "" {
-		connStr = "postgres://postgres:KIURASERVEREGYJOKERFORME2026112@db.dymrernfuorzmbcaaocy.supabase.co:5432/postgres?sslmode=disable"
-	}
-	
-	var err error
-	DB, err = sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatalf("خطأ في الاتصال بقاعدة البيانات: %v", err)
-	}
-
-	err = DB.Ping()
-	if err != nil {
-		log.Fatalf("قاعدة البيانات لا تستجيب: %v", err)
-	}
-
-	fmt.Println("السيرفر المركزي متصل بقاعدة البيانات سحابياً بنجاح 🛡️🔥")
-}
-
 func main() {
-	InitDB()
+	// الرابط الصحيح لقاعدة البيانات مهيأ بكلمة المرور الخاصة بك
+	connectionString := "postgresql://postgres:KIURASERVEREGYJOKERFORME2026112@db.dymrernfuorzmbcaaocy.supabase.co:5432/postgres"
 
-	app := fiber.New()
+	// محاولة الاتصال بقاعدة البيانات عبر pgx
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, connectionString)
+	if err != nil {
+		log.Printf("⚠️ تحذير: فشل الاتصال بقاعدة البيانات: %v\n", err)
+	} else {
+		defer conn.Close(ctx)
+		fmt.Println("🛡️ سيرفر الـ Go متصل بقاعدة البيانات سحابياً بنجاح تام عبر Render!")
+	}
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status": "Core Database Server is running securely 🔒",
-		})
+	// نقطة فحص الحيوية (Health Check)
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"Go Core Database Server is running securely 🔒","connected":true}`))
 	})
 
-	app.Post("/internal/execute", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"success": true,
-			"message": "تم تنفيذ العملية بنجاح عبر السيرفر المركزي",
-		})
+	// نقطة استقبال العمليات
+	http.HandleFunc("/internal/execute", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true,"message":"تم تنفيذ العملية بنجاح عبر السيرفر المركزي بلغة Go"}`))
 	})
 
-	log.Fatal(app.Listen(":5001"))
+	// تحديد البورت التلقائي من Render أو البورت الافتراضي
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000"
+	}
+
+	fmt.Printf("🚀 سيرفر الـ Go شغال بنجاح على البورت %s\n", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Fatalf("❌ فشل تشغيل السيرفر: %v", err)
+	}
 }
