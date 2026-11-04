@@ -1,70 +1,69 @@
 const express = require('express');
-const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
-// الاتصال بقاعدة البيانات بـ Pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+// جلب الروابط ومفاتيح الأمان من متغيرات البيئة على Render
+const CORE_SERVER_URL = process.env.CORE_SERVER_URL || 'https://chat-appcerver-js.onrender.com';
+const INTERNAL_SERVICE_SECRET = "KIURA_INTERNAL_SERVICE_KEY_2026"; // لازم يكون مطابق للمفتاح في السيرفر الرئيسي
 
-// فحص الحيوية لسيرفر الطلبات
+// فحص الحيوية
 app.get('/health', (req, res) => {
   res.status(200).json({
-    status: "Daily Requests Server is live and operational 📋",
+    status: "Daily Requests Server is live and securely connected to Core 📋",
     service: "daily-requests"
   });
 });
 
-// 1. إضافة طلب يومي جديد
+// 1. استقبال الطلب من تطبيق الموبايل وتمريره بذكاء للسيرفر الرئيسي
 app.post('/api/requests/add', async (req, res) => {
   try {
     const { user_id, title, description, category } = req.body;
     
-    const query = `
-      INSERT INTO daily_requests (user_id, title, description, category, status, created_at)
-      VALUES ($1, $2, $3, $4, 'pending', NOW())
-      RETURNING *;
-    `;
-    const values = [user_id, title, description, category || 'general'];
-    
-    // تنفيذ الاستعلام (مفعل عند جاهزية جدول قاعدة البيانات)
-    // const result = await pool.query(query, values);
+    // التحقق السريع من البيانات قبل الإرسال
+    if (!user_id || !title) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "بيانات الطلب ناقصة: يجب توفير معرف المستخدم والعنوان" 
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: "تم تسجيل الطلب اليومي بنجاح وإرساله للمعالجة!",
-      data: { user_id, title, description, category }
+    // إرسال الطلب للسيرفر الرئيسي مع تمرير مفتاح المصادقة الداخلي (Service Secret)
+    const coreResponse = await fetch(`${CORE_SERVER_URL}/api/core/save-request`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-service-secret': INTERNAL_SERVICE_SECRET // مفتاح الحراسة للتعارف الذكي
+      },
+      body: JSON.stringify({ user_id, title, description, category })
     });
+
+    const coreData = await coreResponse.json();
+
+    if (coreResponse.ok && coreData.success) {
+      return res.status(201).json({
+        success: true,
+        message: "تم حفظ الطلب بنجاح عبر السيرفر الرئيسي",
+        data: coreData.data
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: coreData.error || "فشل السيرفر الرئيسي في معالجة الطلب"
+      });
+    }
+
   } catch (error) {
-    console.error("خطأ في إضافة الطلب:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// 2. جلب الطلبات الخاصة بمستخدم معين
-app.get('/api/requests/:user_id', async (req, res) => {
-  try {
-    const { user_id } = req.params;
-    
-    // const query = 'SELECT * FROM daily_requests WHERE user_id = $1 ORDER BY created_at DESC';
-    // const result = await pool.query(query, [user_id]);
-
-    res.status(200).json({
-      success: true,
-      user_id,
-      requests: [] // هنا هتتحط الداتا المسترجعة من القاعدة
+    console.error("خطأ في الاتصال بالسيرفر الرئيسي:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: "خطأ في الشبكة بين الخدمات" 
     });
-  } catch (error) {
-    console.error("خطأ في جلب الطلبات:", error);
-    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`📋 سيرفر الطلبات اليومية شغال بكفاءة على البورت ${PORT}`);
+  console.log(`📋 سيرفر الطلبات اليومية شغال ومرتبط بالكور بذكاء على البورت ${PORT}`);
 });
