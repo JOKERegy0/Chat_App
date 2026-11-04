@@ -2,17 +2,17 @@ const WebSocket = require('ws');
 const url = require('url');
 const jwt = require('jsonwebtoken');
 
-// إعداد السيرفر على المنفذ المتاح
+// إعداد السيرفر على المنفذ المتاح في Render أو البورت الافتراضي
 const PORT = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port: PORT });
 
-// المفتاح السري الموحد لنواة KIURA
+// المفتاح السري الموحد لنواة KIURA والمطابق لباقي الخدمات
 const SECRET_KEY = "KIURA_SECURE_DEV_SIGNATURE_2026_JOKER";
 
-// الحد الأدنى لإصدار التطبيق المقبول أمنياً (أي نسخة قديمة أقل ترفض فوراً)
+// الحد الأدنى لإصدار التطبيق المقبول أمنياً (رفض أي نسخة قديمة فوراً)
 const MIN_ALLOWED_VERSION = '1.0.0+1';
 
-// خريطة لتخزين المستخدمين المتصلين حالياً
+// خريطة لتخزين المستخدمين المتصلين حالياً (Active Connections)
 const connectedClients = new Map();
 
 wss.on('connection', (ws, req) => {
@@ -82,12 +82,12 @@ wss.on('connection', (ws, req) => {
           status: 'pending'
         }));
       }
-    } catch (e) {
+    } else {
       console.error('خطأ في معالجة رسالة الـ WebSocket:', e);
     }
   });
 
-  // تنظيف القائمة عند قطع الاتصال
+  // تنظيف القائمة عند انقطاع الاتصال
   ws.on('close', () => {
     if (userId) {
       connectedClients.delete(userId);
