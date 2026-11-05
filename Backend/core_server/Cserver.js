@@ -6,13 +6,12 @@ app.use(express.json());
 
 const connectionString = process.env.DATABASE_URL;
 const SECRET_KEY = "KIURA_SECURE_DEV_SIGNATURE_2026_JOKER";
-const INTERNAL_SERVICE_SECRET = "KIURA_INTERNAL_SERVICE_KEY_2026"; // مفتاح تواصل الخدمات الفرعية الآمن
+const INTERNAL_SERVICE_SECRET = "KIURA_INTERNAL_SERVICE_KEY_2026";
 
 if (!connectionString) {
     console.error('❌ تنبيه: متغير البيئة DATABASE_URL غير ممرر!');
 }
 
-// إعداد الاتصال مع دعم IPv4/IPv4 Fallback الذكي
 let pool = new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false }
@@ -26,7 +25,6 @@ async function verifyDatabaseConnection() {
     } catch (err) {
         console.error('⚠️ تحذير: فشل الاتصال الأساسي:', err.message);
         if (err.code === 'ENETUNREACH' || err.message.includes('ENETUNREACH')) {
-            console.log('🔄 تم اكتشاف مشكلة في شبكة الاتصال (IPv6)، جاري إعادة توجيه المسار تلقائياً...');
             pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false }, family: 4 });
             try {
                 const fallbackClient = await pool.connect();
@@ -41,9 +39,6 @@ async function verifyDatabaseConnection() {
 
 verifyDatabaseConnection();
 
-// ==========================================
-// 🛡️ نظام الحراسة والتعرف الذكي (Middleware)
-// ==========================================
 function verifyInternalService(req, res, next) {
     const serviceSecret = req.headers['x-service-secret'];
     if (!serviceSecret || serviceSecret !== INTERNAL_SERVICE_SECRET) {
@@ -52,7 +47,7 @@ function verifyInternalService(req, res, next) {
     next();
 }
 
-// نقطة فحص الإقلاع للتطبيق (App Handshake)
+// 1. نقطة فحص الإقلاع للتطبيق (App Handshake)
 app.get('/api/core/handshake', (req, res) => {
     const clientVersion = req.headers['x-app-version'];
     const MIN_ALLOWED_VERSION = '1.0.0+1';
@@ -72,7 +67,31 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// استقبال وحفظ الطلبات اليومية
+// 2. تسجيل نبضة الأمان والـ IP الخاص بالجهاز في قاعدة البيانات
+app.post('/api/core/log-security-pulse', verifyInternalService, async (req, res) => {
+    try {
+        const { user_id, device_id, ip_address, status, checks_passed } = req.body;
+        
+        const query = `
+            INSERT INTO security_logs (user_id, device_id, ip_address, status, checks_passed, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING *;
+        `;
+        const values = [user_id, device_id, ip_address, status, checks_passed];
+        const result = await pool.query(query, values);
+
+        res.status(201).json({
+            success: true,
+            message: "تم تسجيل نبضة الأمان والـ IP بنجاح في قاعدة البيانات المركزية",
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error("خطأ في تسجيل سجلات الأمان:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. استقبال وحفظ الطلبات اليومية
 app.post('/api/core/save-request', verifyInternalService, async (req, res) => {
     try {
         const { user_id, title, description, category } = req.body;
@@ -94,18 +113,16 @@ app.post('/api/core/save-request', verifyInternalService, async (req, res) => {
             message: "تم حفظ الطلب في قاعدة البيانات بنجاح بواسطة السيرفر المركزي",
             data: result.rows[0]
         });
-
     } catch (error) {
         console.error("خطأ في قاعدة البيانات:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// تسجيل مستخدم جديد (يُستدعى من سيرفر المصادقة)
+// 4. تسجيل المستخدمين
 app.post('/api/core/register-user', verifyInternalService, async (req, res) => {
     try {
         const { username, hashed_password } = req.body;
-        
         const checkUser = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         if (checkUser.rows.length > 0) {
             return res.status(400).json({ success: false, error: "اسم المستخدم مسجل مسبقاً" });
@@ -129,7 +146,6 @@ app.post('/api/core/register-user', verifyInternalService, async (req, res) => {
     }
 });
 
-// التحقق من بيانات المستخدم (يُستدعى من سيرفر المصادقة)
 app.post('/api/core/verify-user', verifyInternalService, async (req, res) => {
     try {
         const { username } = req.body;
@@ -139,19 +155,15 @@ app.post('/api/core/verify-user', verifyInternalService, async (req, res) => {
             return res.status(404).json({ success: false, error: "المستخدم غير موجود" });
         }
 
-        res.status(200).json({
-            success: true,
-            user: userQuery.rows[0]
-        });
+        res.status(200).json({ success: true, user: userQuery.rows[0] });
     } catch (error) {
         console.error("خطأ في التحقق من المستخدم:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// نقطة فحص الحيوية
 app.get('/health', (req, res) => {
-    res.json({ status: "Core Database Server is running with Smart Recognition 🔒" });
+    res.json({ status: "Core Database Server is running with Full Security & IP Tracking 🔒" });
 });
 
 const PORT = process.env.PORT || 5001;
