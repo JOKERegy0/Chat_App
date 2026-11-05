@@ -1,42 +1,48 @@
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'api_config.dart';
 
 class MediaService {
-  // رابط سيرفر الوسائط على Render اللي حددناه في الإعدادات
-  final String _mediaServiceUrl = 'https://chat-app-iqrv.onrender.com';
-
-  // دالة لرفع الوسائط (صور، فيديوهات، أو حالات صوتية)
-  Future<String?> uploadMedia(File file, String folderName) async {
+  // دالة لرفع الوسائط مع تمرير الوجهة (مجموعة، قناة، مجتمع، شات) ومعرف المرسل عبر التوكن
+  Future?> uploadMedia({
+    required File file,
+    required String targetType, // group, channel, community, chat
+    required String targetId,
+    required String authToken,
+  }) async {
     try {
-      // تجهيز طلب رفع متعدد الأجزاء (Multipart Request)
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_mediaServiceUrl/upload'),
+        Uri.parse('${AppConfig.mediaService}/api/v1/media/upload'),
       );
 
-      // إضافة المجلد المستهدف (مثل: statuses أو profile_pics)
-      request.fields['folder'] = folderName;
+      // إضافة هيدر المصادقة (JWT Token)
+      request.headers['Authorization'] = 'Bearer $authToken';
+
+      // تحديد الوجهة والهدف بدقة لكي يتعرف السيرفر على الصلاحيات
+      request.fields['target_type'] = targetType;
+      request.fields['target_id'] = targetId;
 
       // إضافة الملف للطلب
       request.files.add(
         await http.MultipartFile.fromPath('file', file.path),
       );
 
-      // إرسال الطلب للسيرفر
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
+      
+      var data = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        var data = jsonDecode(response.body);
-        // إرجاع رابط الملف المرفوع مباشرة
-        return data['url'] ?? data['media_url'];
+        print('📁 تم رفع الملف بنجاح داخل $targetType ($targetId)');
+        return data; // يرجع رابط الملف وتفاصيل الرفع
       } else {
-        print('فشل رفع الوسائط: ${response.body}');
+        print('❌ فشل رفع الوسائط: ${data['detail'] ?? response.body}');
         return null;
       }
     } catch (e) {
-      print('حدث خطأ أثناء الاتصال بسيرفر الوسائط: $e');
+      print('❌ حدث خطأ أثناء الاتصال بسيرفر الوسائط: $e');
       return null;
     }
   }
