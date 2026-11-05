@@ -1,28 +1,35 @@
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'dart:convert';
+import 'api_config.dart';
 
 class WebSocketService {
-  // رابط سيرفر الـ WebSocket على Render (تغيير http إلى wss للاتصال الآمن)
-  final String _wsUrl = 'wss://chat-app-4hax.onrender.com';
   WebSocketChannel? _channel;
 
-  // 1. الاتصال بالسيرفر
-  void connect(String userId) {
+  // 1. الاتصال بالسيرفر مع تمرير المعايير الأمنية (User ID, Version, Token)
+  void connect({
+    required String userId,
+    required String token,
+  }) {
     try {
-      _channel = WebSocketChannel.connect(Uri.parse('$_wsUrl?user_id=$userId'));
-      print('تم الاتصال بسيرفر الشات الفوري بنجاح 🚀');
+      final wsUri = Uri.parse(
+        '${AppConfig.webService}?user_id=$userId&version=${AppConfig.appVersion}&token=$token',
+      );
+      
+      _channel = WebSocketChannel.connect(wsUri);
+      print('تم الاتصال بسيرفر الشات الفوري بأمان تام 🚀');
     } catch (e) {
       print('خطأ في الاتصال بالـ WebSocket: $e');
     }
   }
 
   // 2. إرسال رسالة جديدة
-  void sendMessage(String recipientId, String messageText) {
+  void sendMessage(String recipientId, String messageText, {String? chatId}) {
     if (_channel != null) {
       final messageData = jsonEncode({
         'recipient_id': recipientId,
-        'message': messageText,
+        'chat_id': chatId ?? '',
+        'content': messageText,
         'timestamp': DateTime.now().toIso8601String(),
       });
       
