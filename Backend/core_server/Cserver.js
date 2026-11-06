@@ -6,12 +6,13 @@ app.use(express.json());
 
 const connectionString = process.env.DATABASE_URL;
 const SECRET_KEY = "KIURA_SECURE_DEV_SIGNATURE_2026_JOKER";
-const INTERNAL_SERVICE_SECRET = "KIURA_INTERNAL_SERVICE_KEY_2026";
+const INTERNAL_SERVICE_SECRET = "KIURA_INTERNAL_SERVICE_KEY_2026"; // مفتاح تواصل الخدمات الفرعية الآمن
 
 if (!connectionString) {
     console.error('❌ تنبيه: متغير البيئة DATABASE_URL غير ممرر!');
 }
 
+// إعداد الاتصال مع دعم IPv4/IPv4 Fallback الذكي
 let pool = new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false }
@@ -25,6 +26,7 @@ async function verifyDatabaseConnection() {
     } catch (err) {
         console.error('⚠️ تحذير: فشل الاتصال الأساسي:', err.message);
         if (err.code === 'ENETUNREACH' || err.message.includes('ENETUNREACH')) {
+            console.log('🔄 تم اكتشاف مشكلة في شبكة الاتصال، جاري إعادة توجيه المسار تلقائياً...');
             pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false }, family: 4 });
             try {
                 const fallbackClient = await pool.connect();
@@ -39,6 +41,9 @@ async function verifyDatabaseConnection() {
 
 verifyDatabaseConnection();
 
+// ==========================================
+// 🛡️ نظام الحراسة والتعرف الذكي (Middleware)
+// ==========================================
 function verifyInternalService(req, res, next) {
     const serviceSecret = req.headers['x-service-secret'];
     if (!serviceSecret || serviceSecret !== INTERNAL_SERVICE_SECRET) {
@@ -67,7 +72,40 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// 2. تسجيل نبضة الأمان والـ IP الخاص بالجهاز في قاعدة البيانات
+// 2. نظام البحث الذكي المركزي (يمنع ظهور المستخدمين عشوائياً ويحمي الخصوصية)
+app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
+    try {
+        const { search_query, current_user } = req.body;
+        
+        // لو نص البحث فارغ، نرجع قائمة فارغة تماماً
+        if (!search_query || search_query.trim() === '') {
+            return res.status(200).json({
+                success: true,
+                users: []
+            });
+        }
+
+        const query = `
+            SELECT username, created_at 
+            FROM users 
+            WHERE username ILIKE $1 AND username != $2 
+            LIMIT 20;
+        `;
+        const values = [`%${search_query}%`, current_user || ''];
+        const result = await pool.query(query, values);
+
+        res.status(200).json({
+            success: true,
+            users: result.rows
+        });
+
+    } catch (error) {
+        console.error("خطأ في نظام البحث المركزي:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. تسجيل نبضة الأمان والـ IP الخاص بالجهاز
 app.post('/api/core/log-security-pulse', verifyInternalService, async (req, res) => {
     try {
         const { user_id, device_id, ip_address, status, checks_passed } = req.body;
@@ -82,7 +120,7 @@ app.post('/api/core/log-security-pulse', verifyInternalService, async (req, res)
 
         res.status(201).json({
             success: true,
-            message: "تم تسجيل نبضة الأمان والـ IP بنجاح في قاعدة البيانات المركزية",
+            message: "تم تسجيل نبضة الأمان والـ IP بنجاح",
             data: result.rows[0]
         });
     } catch (error) {
@@ -91,7 +129,7 @@ app.post('/api/core/log-security-pulse', verifyInternalService, async (req, res)
     }
 });
 
-// 3. استقبال وحفظ الطلبات اليومية
+// 4. استقبال وحفظ الطلبات اليومية
 app.post('/api/core/save-request', verifyInternalService, async (req, res) => {
     try {
         const { user_id, title, description, category } = req.body;
@@ -110,7 +148,7 @@ app.post('/api/core/save-request', verifyInternalService, async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "تم حفظ الطلب في قاعدة البيانات بنجاح بواسطة السيرفر المركزي",
+            message: "تم حفظ الطلب في قاعدة البيانات بنجاح",
             data: result.rows[0]
         });
     } catch (error) {
@@ -119,7 +157,7 @@ app.post('/api/core/save-request', verifyInternalService, async (req, res) => {
     }
 });
 
-// 4. تسجيل المستخدمين
+// 5. تسجيل مستخدم جديد
 app.post('/api/core/register-user', verifyInternalService, async (req, res) => {
     try {
         const { username, hashed_password } = req.body;
@@ -146,6 +184,7 @@ app.post('/api/core/register-user', verifyInternalService, async (req, res) => {
     }
 });
 
+// 6. التحقق من المستخدم
 app.post('/api/core/verify-user', verifyInternalService, async (req, res) => {
     try {
         const { username } = req.body;
@@ -162,8 +201,9 @@ app.post('/api/core/verify-user', verifyInternalService, async (req, res) => {
     }
 });
 
+// نقطة فحص الحيوية
 app.get('/health', (req, res) => {
-    res.json({ status: "Core Database Server is running with Full Security & IP Tracking 🔒" });
+    res.json({ status: "Core Database Server is running with Smart Recognition & Secure Search 🔒" });
 });
 
 const PORT = process.env.PORT || 5001;
