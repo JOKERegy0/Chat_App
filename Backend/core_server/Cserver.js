@@ -72,29 +72,31 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// 2. نظام البحث الذكي المركزي (يمنع ظهور المستخدمين عشوائياً ويحمي الخصوصية)
-// نظام البحث الذكي المركزي (محدث ليرجع الـ id والـ username بدقة)
+// نظام البحث الذكي المركزي (مبسط ومباشر للبحث في جدول profiles)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
-        const { search_query, current_user } = req.body;
+        const { search_query } = req.body;
+        console.log("🔍 استعلام بحث وارد عن:", search_query);
         
         if (!search_query || search_query.trim() === '') {
             return res.status(200).json({ success: true, users: [] });
         }
 
-        // جلب الـ id والـ username معاً لكي يتمكن التطبيق من فتح الشات فوراً
+        // استعلام مباشر وسريع لجلب id و username من جدول profiles
         const query = `
             SELECT id, username, created_at 
-            FROM users 
-            WHERE username ILIKE $1 AND username != $2 
+            FROM public.profiles 
+            WHERE username ILIKE $1 
             LIMIT 20;
         `;
-        const values = [`%${search_query}%`, current_user || ''];
+        const values = [`%${search_query.trim()}%`];
         const result = await pool.query(query, values);
+
+        console.log("📦 الحسابات المعثور عليها:", result.rows);
 
         res.status(200).json({ success: true, users: result.rows });
     } catch (error) {
-        console.error("خطأ في نظام البحث المركزي:", error);
+        console.error("❌ خطأ في نظام البحث المركزي:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
