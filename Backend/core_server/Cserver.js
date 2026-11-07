@@ -118,7 +118,7 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
 
     } catch (error) {
         console.error("❌ خطأ عام في مسار البحث:", error.message);
-        return.status(200).json({ success: true, users: [] }); // نرجع لستة فارغة بدلاً من إيقاف السيرفر
+        return res.status(200).json({ success: true, users: [] }); // نرجع لستة فارغة بدلاً من إيقاف السيرفر
     }
 });
 
