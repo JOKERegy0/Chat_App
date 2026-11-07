@@ -1,37 +1,59 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"os"
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "os"
 )
 
+// هيكل الرد السريع للعميل
+type Response struct {
+    Status    string `json:"status"`
+    Core      string `json:"core"`
+    FastSpeed bool   `json:"fast_speed"`
+}
+
 func main() {
-	// سيرفر الـ Go يعمل بكفاءة ودعم سحابي كامل
-	fmt.Println("🛡️ سيرفر الـ Go يعمل بنجاح وجاهز لاستقبال الطلبات والتوجيه السحابي!")
+    // نقطة فحص الحيوية والتأكيد أن سيرفر Go شغال كأداء أساسي
+    http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        
+        response := Response{
+            Status:    "Active and running securely 🚀",
+            Core:      "Go Primary Gateway (KIURA)",
+            FastSpeed: true,
+        }
+        json.NewEncoder(encodeResponse(w, response)) // استجابة سريعة
+    })
 
-	// نقطة فحص الحيوية (Health Check)
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"Go Core Server is running live and secure 🚀","service":"go-backend","active":true}`))
-	})
+    // نقطة استعلام واستقبال العمليات الأساسية بسرعة فائقة
+    http.HandleFunc("/api/core/execute", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        
+        w.Write([]byte(`{
+            "success": true,
+            "message": "تم تنفيذ الطلب بنجاح عبر سيرفر Go الأساسي وبأقصى سرعة ⚡",
+            "server": "Go High-Performance Core"
+        }`))
+    })
 
-	// نقطة تنفيذ العمليات
-	http.HandleFunc("/internal/execute", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"message":"تم تنفيذ الطلب عبر سيرفر Go السحابي بنجاح"}`))
-	})
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8080" // البورت الافتراضي لو مش محدد
+    }
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "10000"
-	}
+    fmt.Printf("🚀 KIURA Go Primary Core running smoothly on port %s\n", port)
+    if err := http.ListenAndServe(":"+port, nil); err != nil {
+        log.Fatalf("❌ Server failed to start: %v", err)
+    }
+}
 
-	fmt.Printf("🚀 سيرفر الـ Go شغال بنجاح على البورت %s\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("❌ فشل تشغيل السيرفر: %v", err)
-	}
+// دالة مساعدة لتسهيل كتابة الاستجابة
+func encodeResponse(w http.ResponseWriter, v interface{}) http.ResponseWriter {
+    json.NewEncoder(w).Encode(v)
+    return w
 }
