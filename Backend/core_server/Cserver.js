@@ -71,8 +71,7 @@ app.get('/api/core/handshake', (req, res) => {
         server_time: Date.now()
     });
 });
-
-// نظام البحث الذكي المركزي المحصّن ضد الأخطاء
+// نظام البحث الذكي المركزي (مع طباعة الخطأ البرمجي الحرفي للتشخيص الفوري)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
         const { search_query } = req.body;
@@ -85,27 +84,27 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
         let rows = [];
         const searchTerm = `%${search_query.trim()}%`;
 
-        // المحاولة الأولى: البحث في جدول profiles
+        // المحاولة الأولى: البحث في جدول profiles مع طباعة الخطأ الحقيقي إن وجد
         try {
             const res1 = await pool.query(
-                `SELECT id, username FROM profiles WHERE username ILIKE $1 LIMIT 20;`,
+                `SELECT id, username FROM public.profiles WHERE username ILIKE $1 LIMIT 20;`,
                 [searchTerm]
             );
             rows = res1.rows;
         } catch (e1) {
-            console.log("⚠️ محاولة البحث في profiles لم تنجح، جاري تجنب الخطأ...");
+            console.log("⚠️ خطأ قاعدة البيانات في جدول profiles:", e1.message);
         }
 
-        // لو لمש نجد نتائج، نحاول البحث في جدول users كبديل احتياطي
+        // لو لم نجد نتائج، نحاول البحث في جدول users كبديل احتياطي
         if (rows.length === 0) {
             try {
                 const res2 = await pool.query(
-                    `SELECT id, username FROM users WHERE username ILIKE $1 LIMIT 20;`,
+                    `SELECT id, username FROM public.users WHERE username ILIKE $1 LIMIT 20;`,
                     [searchTerm]
                 );
                 rows = res2.rows;
             } catch (e2) {
-                console.log("⚠️ محاولة البحث في users لم تنجح أيضاً...");
+                console.log("⚠️ خطأ قاعدة البيانات في جدول users:", e2.message);
             }
         }
 
@@ -118,7 +117,7 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
 
     } catch (error) {
         console.error("❌ خطأ عام في مسار البحث:", error.message);
-        return res.status(200).json({ success: true, users: [] }); // نرجع لستة فارغة بدلاً من إيقاف السيرفر
+        return res.status(200).json({ success: true, users: [] });
     }
 });
 
