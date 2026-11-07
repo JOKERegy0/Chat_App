@@ -72,7 +72,7 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// نظام البحث الذكي المركزي (مع دعم البحث باليوزرنيم أو الإيميل وطباعة التشخيص)
+// نظام البحث الذكي المركزي (مصحح وآمن 100%)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
         const { search_query } = req.body;
@@ -82,17 +82,17 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
             return res.status(200).json({ success: true, users: [] });
         }
 
-        // البحث بمرونة في جدول profiles (سواء في اسم المستخدم أو البريد)
+        // البحث حصراً باستخدام العمودين المؤكدين في جدول profiles (id و username)
         const query = `
-            SELECT id, username, email 
-            FROM public.profiles 
-            WHERE username ILIKE $1 OR email ILIKE $1 
+            SELECT id, username 
+            FROM profiles 
+            WHERE username ILIKE $1 
             LIMIT 20;
         `;
         const values = [`%${search_query.trim()}%`];
         const result = await pool.query(query, values);
 
-        console.log("🔥 [DEBUG] النتائج الراجعة من قاعدة البيانات:", result.rows);
+        console.log("🔥 [DEBUG] تم العثور على المستخدمين بنجاح:", result.rows);
 
         res.status(200).json({ success: true, users: result.rows });
     } catch (error) {
