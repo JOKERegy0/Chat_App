@@ -73,20 +73,18 @@ app.get('/api/core/handshake', (req, res) => {
 });
 
 // 2. نظام البحث الذكي المركزي (يمنع ظهور المستخدمين عشوائياً ويحمي الخصوصية)
+// نظام البحث الذكي المركزي (محدث ليرجع الـ id والـ username بدقة)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
         const { search_query, current_user } = req.body;
         
-        // لو نص البحث فارغ، نرجع قائمة فارغة تماماً
         if (!search_query || search_query.trim() === '') {
-            return res.status(200).json({
-                success: true,
-                users: []
-            });
+            return res.status(200).json({ success: true, users: [] });
         }
 
+        // جلب الـ id والـ username معاً لكي يتمكن التطبيق من فتح الشات فوراً
         const query = `
-            SELECT username, created_at 
+            SELECT id, username, created_at 
             FROM users 
             WHERE username ILIKE $1 AND username != $2 
             LIMIT 20;
@@ -94,11 +92,7 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
         const values = [`%${search_query}%`, current_user || ''];
         const result = await pool.query(query, values);
 
-        res.status(200).json({
-            success: true,
-            users: result.rows
-        });
-
+        res.status(200).json({ success: true, users: result.rows });
     } catch (error) {
         console.error("خطأ في نظام البحث المركزي:", error);
         res.status(500).json({ success: false, error: error.message });
