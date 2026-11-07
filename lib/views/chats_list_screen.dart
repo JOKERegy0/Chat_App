@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/core_api_service.dart'; // استدعاء خدمة السيرفر المركزي للبحث
+import '../services/core_api_service.dart';
 import 'chat_room_screen.dart';
 import 'profile_screen.dart';
+import 'statuses_screen.dart'; // شاشة الحالات الموجودة لديك
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -12,7 +13,7 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List _searchResults = []; // النتائج المستلمة حصراً من السيرفر المركزي
+  List _searchResults = [];
   bool _isLoading = false;
   String _errorMessage = '';
   final TextEditingController _searchController = TextEditingController();
@@ -23,11 +24,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     _searchController.addListener(_onSearchQueryChanged);
   }
 
-  // 🔍 البحث الذكي الموجه مباشرة عبر السيرفر المركزي (Core Server)
+  // 🔍 البحث الذكي عبر السيرفر المركزي
   Future<void> _onSearchQueryChanged() async {
     final query = _searchController.text.trim();
     
-    // لو خانة البحث فارغة، نفرغ القائمة فوراً لضمان عدم ظهور أي مستخدمين عشوائياً
     if (query.isEmpty) {
       setState(() {
         _searchResults = [];
@@ -42,11 +42,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     });
 
     try {
-      // جلب اسم المستخدم الحالي للتأكد من استبعاده من نتائج البحث
       final currentUser = Supabase.instance.client.auth.currentUser;
       final currentUsername = currentUser?.userMetadata?['username'] ?? '';
 
-      // مخاطبة السيرفر المركزي لجلب نتائج البحث فقط بأمان تام
       final results = await CoreApiService.searchUsers(
         searchQuery: query,
         currentUsername: currentUsername,
@@ -57,7 +55,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'خطأ في الاتصال بنظام البحث المركزي: $e';
+        _errorMessage = 'خطأ في الاتصال بنظام البحث: $e';
       });
       print('Search Error: $e');
     } finally {
@@ -80,13 +78,26 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       appBar: AppBar(
         title: const Text(
           'KIURA Secure Messenger',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
         actions: [
+          // 1. زر الحالة (Statuses)
+          IconButton(
+            icon: const Icon(Icons.amp_stories_rounded, color: Colors.blueAccent),
+            tooltip: 'الحالات والقصص',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const StatusesScreen()),
+              );
+            },
+          ),
+          // 2. زر الملف الشخصي (Profile)
           IconButton(
             icon: const Icon(Icons.person, color: Colors.white70),
+            tooltip: 'الملف الشخصي',
             onPressed: () {
               Navigator.push(
                 context,
@@ -94,8 +105,21 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               );
             },
           ),
+          // 3. زر الإعدادات (Settings)
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white70),
+            tooltip: 'الإعدادات',
+            onPressed: () {
+              // يمكنك ربطها بشاشة الإعدادات لاحقاً أو عرض رسالة
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('إعدادات KIURA قيد تطوير الحماية التامة 🔒')),
+              );
+            },
+          ),
+          // 4. زر تسجيل الخروج (Logout)
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
+            tooltip: 'تسجيل الخروج',
             onPressed: () async {
               await Supabase.instance.client.auth.signOut();
             },
@@ -146,7 +170,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 : _searchController.text.trim().isEmpty
                     ? const Center(
                         child: Text(
-                          'اكتب اسم المستخدم في الأعلى للبحث والبدء بمراسلة آمنة 🔒',
+                          '🔒 اكتب اسم المستخدم في الأعلى للبحث والبدء بمراسلة آمنة',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white54, fontSize: 14),
                         ),
@@ -203,6 +227,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                   ),
                                   trailing: const Icon(Icons.chat_bubble_outline, color: Color(0xFF3B82F6)),
                                   onTap: () {
+                                    if (userId.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('خطأ: معرف المستخدم غير متوفر')),
+                                      );
+                                      return;
+                                    }
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
