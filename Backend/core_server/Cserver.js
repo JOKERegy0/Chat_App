@@ -72,31 +72,31 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// نظام البحث الذكي المركزي (مبسط ومباشر للبحث في جدول profiles)
+// نظام البحث الذكي المركزي (مع دعم البحث باليوزرنيم أو الإيميل وطباعة التشخيص)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
         const { search_query } = req.body;
-        console.log("🔍 استعلام بحث وارد عن:", search_query);
+        console.log("🔥 [DEBUG] وصل طلب بحث للسيرفر عن الكلمة:", search_query);
         
         if (!search_query || search_query.trim() === '') {
             return res.status(200).json({ success: true, users: [] });
         }
 
-        // استعلام مباشر وسريع لجلب id و username من جدول profiles
+        // البحث بمرونة في جدول profiles (سواء في اسم المستخدم أو البريد)
         const query = `
-            SELECT id, username, created_at 
+            SELECT id, username, email 
             FROM public.profiles 
-            WHERE username ILIKE $1 
+            WHERE username ILIKE $1 OR email ILIKE $1 
             LIMIT 20;
         `;
         const values = [`%${search_query.trim()}%`];
         const result = await pool.query(query, values);
 
-        console.log("📦 الحسابات المعثور عليها:", result.rows);
+        console.log("🔥 [DEBUG] النتائج الراجعة من قاعدة البيانات:", result.rows);
 
         res.status(200).json({ success: true, users: result.rows });
     } catch (error) {
-        console.error("❌ خطأ في نظام البحث المركزي:", error.message);
+        console.error("❌ خطأ قاتل في مسار البحث:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
