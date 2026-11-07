@@ -3,19 +3,19 @@ import 'package:http/http.dart' as http;
 import 'api_config.dart';
 
 class CoreApiService {
+  // يجب أن يتطابق هذا المفتاح تماماً مع الموجود في Cserver.js
   static const String internalServiceSecret = "KIURA_INTERNAL_SERVICE_KEY_2026";
 
-  // دالة البحث الذكي عبر السيرفر المركزي
   static Future<List<dynamic>> searchUsers({
     required String searchQuery,
     required String currentUsername,
   }) async {
     try {
-      final uri = Uri.parse('${AppConfig.coreService}/api/core/search-users');
-      print('🌐 جاري إرسال طلب البحث إلى: $uri للكلمة: $searchQuery');
+      final url = '${AppConfig.coreService}/api/core/search-users';
+      print('🌐 جاري إرسال البحث إلى: $url للكلمة: $searchQuery');
 
       final response = await http.post(
-        uri,
+        Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
           'x-service-secret': internalServiceSecret,
@@ -26,7 +26,8 @@ class CoreApiService {
         }),
       );
 
-      print('📥 استجابة السيرفر (Code ${response.statusCode}): ${response.body}');
+      print('📥 كود الاستجابة من السيرفر: ${response.statusCode}');
+      print('📥 محتوى الاستجابة: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -36,7 +37,7 @@ class CoreApiService {
       }
       return [];
     } catch (e) {
-      print('❌ خطأ في الاتصال بنظام البحث: $e');
+      print('❌ خطأ في الاتصال بالبحث: $e');
       return [];
     }
   }
