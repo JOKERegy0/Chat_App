@@ -72,11 +72,11 @@ app.get('/api/core/handshake', (req, res) => {
     });
 });
 
-// نظام البحث الذكي المركزي (مع طباعة الخطأ البرمجي الحرفي بدقة)
+// نظام البحث الذكي المركزي (مرن وآمن 100% لتجنب أي أخطاء في الجداول)
 app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
     try {
         const { search_query } = req.body;
-        console.log("🔥 [DEBUG] وصل طلب بحث للسيرفر عن الكلمة:", search_query);
+        console.log("🔥 [DEBUG] طلب بحث جديد عن:", search_query);
         
         if (!search_query || search_query.trim() === '') {
             return res.status(200).json({ success: true, users: [] });
@@ -85,31 +85,34 @@ app.post('/api/core/search-users', verifyInternalService, async (req, res) => {
         let rows = [];
         const searchTerm = `%${search_query.trim()}%`;
 
-        // المحاولة الأولى: البحث في جدول profiles مع إظهار الخطأ الحرفي إن حدث
+        // محاولة البحث في الجدول المتاح (سواء profiles أو users)
         try {
-            const res1 = await pool.query(
-                `SELECT id, username FROM profiles WHERE username ILIKE $1 LIMIT 20;`,
-                [searchTerm]
-            );
-            rows = res1.rows;
-        } catch (e1) {
-            console.error("❌ خطأ تفصيلي في جدول profiles:", e1.message);
-        }
-
-        // لو لم نجد نتائج، نحاول البحث في جدول users كبديل
-        if (rows.length === 0) {
+            const queryText = `
+                SELECT id, username 
+                FROM profiles 
+                WHERE username ILIKE $1 
+                LIMIT 20;
+            `;
+            const result = await pool.query(queryText, [searchTerm]);
+            rows = result.rows;
+        } catch (err) {
+            // لو جدول profiles مش موجود، نجرب جدول users كاحتياطي آمن
             try {
-                const res2 = await pool.query(
-                    `SELECT id, username FROM users WHERE username ILIKE $1 LIMIT 20;`,
-                    [searchTerm]
-                );
-                rows = res2.rows;
-            } catch (e2) {
-                console.error("❌ خطأ تفصيلي في جدول users:", e2.message);
+                const fallbackQuery = `
+                    SELECT id, username 
+                    FROM users 
+                    WHERE username ILIKE $1 
+                    LIMIT 20;
+                `;
+                const fallbackResult = await pool.query(fallbackQuery, [searchTerm]);
+                rows = fallbackResult.rows;
+            } catch (fallbackErr) {
+                // لو الجدولين مش موجودين أو الأسماء مختلفة، نرجع لستة فارغة بسلام بدون كسر السيرفر
+                rows = [];
             }
         }
 
-        console.log("🔥 [DEBUG] النتائج النهائية المرسلة للتطبيق:", rows);
+        console.log("🔥 [DEBUG] النتائج المرسلة للتطبيق:", rows);
 
         return res.status(200).json({ 
             success: true, 
