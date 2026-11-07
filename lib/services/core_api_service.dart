@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'api_config.dart'; // مستودع الروابط الأساسية لديك
+import 'api_config.dart';
 
 class CoreApiService {
   static const String internalServiceSecret = "KIURA_INTERNAL_SERVICE_KEY_2026";
@@ -11,8 +11,11 @@ class CoreApiService {
     required String currentUsername,
   }) async {
     try {
+      final uri = Uri.parse('${AppConfig.coreService}/api/core/search-users');
+      print('🌐 جاري إرسال طلب البحث إلى: $uri للكلمة: $searchQuery');
+
       final response = await http.post(
-        Uri.parse('${AppConfig.coreService}/api/core/search-users'),
+        uri,
         headers: {
           'Content-Type': 'application/json',
           'x-service-secret': internalServiceSecret,
@@ -23,13 +26,17 @@ class CoreApiService {
         }),
       );
 
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        return data['users'];
+      print('📥 استجابة السيرفر (Code ${response.statusCode}): ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['users'] is List) {
+          return data['users'];
+        }
       }
       return [];
     } catch (e) {
-      print('خطأ في الاتصال بنظام البحث: $e');
+      print('❌ خطأ في الاتصال بنظام البحث: $e');
       return [];
     }
   }
