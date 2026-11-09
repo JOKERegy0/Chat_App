@@ -4,12 +4,14 @@ const app = express();
 
 app.use(express.json());
 
-// عناوين السيرفرات الداخلية (تأخذ من متغيرات البيئة أو الـ Fallback محلياً)
+// 🌐 عناوين السيرفرات الداخلية (تأخذ من متغيرات البيئة أو الـ Fallback محلياً)
 const INTERNAL_AUTH_SERVER = process.env.INTERNAL_AUTH_SERVER || 'http://localhost:5001';
-const INTERNAL_CHAT_SERVER = process.env.INTERNAL_CHAT_SERVER || 'http://localhost:5002'; // خاص بـ server.js للمراسلة
-const INTERNAL_SECURITY_SERVER = process.env.INTERNAL_SECURITY_SERVER || 'http://localhost:5003'; // خاص بـ security_server.py
+const INTERNAL_CHAT_SERVER = process.env.INTERNAL_CHAT_SERVER || 'http://localhost:5002';         // سيرفر المراسلة
+const INTERNAL_SECURITY_SERVER = process.env.INTERNAL_SECURITY_SERVER || 'http://localhost:5003'; // سيرفر الأمان
+const INTERNAL_MEDIA_SERVER = process.env.INTERNAL_MEDIA_SERVER || 'http://localhost:5004';       // سيرفر الوسائط والملف
+const INTERNAL_DAILY_SERVER = process.env.INTERNAL_DAILY_SERVER || 'http://localhost:5005';       // سيرفر الطلبات اليومية
 
-// مفتاح الأمان الموحد والمتفق عليه للخدمات الداخلية
+// 🔑 مفتاح الأمان الموحد والمتفق عليه للخدمات الداخلية
 const INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET || "KIURA_INTERNAL_SERVICE_KEY_2026";
 
 // 🛡️ Middleware عام لسحب وتتبع آيبي الجهاز لكل الطلبات الواردة
@@ -17,17 +19,16 @@ app.use((req, res, next) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     req.clientIp = clientIp;
     
-    console.log(`🌐 [DMZ Traffic] IP: ${clientIp} | Method: ${req.method} | Path: ${req.path}`);
+    console.log(`🌐 [Node DMZ Traffic] IP: ${clientIp} | Method: ${req.method} | Path: ${req.path}`);
     next();
 });
 
-// 1. 🚀 هاندشيك الإقلاع (Startup Handshake & Device Check)
+// 1. 🚀 هاندشيك الإقلاع وفحص الجهاز
 app.post('/api/core/handshake', (req, res) => {
     try {
         const { deviceId, appVersion, securityKey } = req.body;
         const clientIp = req.clientIp;
 
-        // التحقق من صحة مفتاح الأمان المرسل من التطبيق
         if (!securityKey || securityKey !== INTERNAL_SERVICE_SECRET) {
             console.warn(`🚨 Unauthorized Handshake Attempt from IP: ${clientIp}`);
             return res.status(403).json({
@@ -50,7 +51,7 @@ app.post('/api/core/handshake', (req, res) => {
     }
 });
 
-// 2. 💓 نبضة الأمان المستمرة (Security Pulse / Heartbeat)
+// 2. 💓 نبضة الأمان المستمرة (Heartbeat)
 app.post('/api/core/pulse', (req, res) => {
     const { deviceToken } = req.body;
     const clientIp = req.clientIp;
@@ -67,89 +68,88 @@ app.post('/api/core/pulse', (req, res) => {
     });
 });
 
-// 3. 🔄 توجيه طلبات المصادقة وتسجيل الدخول للسيرفر الداخلي
+// 3. 🔄 توجيه طلبات المصادقة (Auth)
 app.all('/api/auth/*', async (req, res) => {
     try {
         const targetUrl = `${INTERNAL_AUTH_SERVER}${req.originalUrl}`;
-        console.log(`🔄 Proxying Auth request to: ${targetUrl}`);
-
         const response = await axios({
             method: req.method,
             url: targetUrl,
             data: req.body,
-            headers: {
-                ...req.headers,
-                'x-client-ip': req.clientIp,
-                'x-forwarded-by': 'kiura-dmz-gateway',
-            }
+            headers: { ...req.headers, 'x-client-ip': req.clientIp, 'x-forwarded-by': 'kiura-node-dmz' }
         });
-
         res.status(response.status).json(response.data);
     } catch (error) {
-        console.error(`❌ Auth Proxy Error: ${error.message}`);
-        res.status(error.response?.status || 500).json({
-            error: "Auth Gateway Routing Error",
-            details: error.response?.data || error.message
-        });
+        res.status(error.response?.status || 500).json({ error: "Auth Gateway Routing Error", details: error.message });
     }
 });
 
-// 4. 💬 توجيه طلبات المراسلة والشات إلى سيرفر server.js الداخلي
+// 4. 💬 توجيه طلبات المراسلة والشات (Chat)
 app.all('/api/chat/*', async (req, res) => {
     try {
         const targetUrl = `${INTERNAL_CHAT_SERVER}${req.originalUrl}`;
-        console.log(`💬 Proxying Chat request to: ${targetUrl}`);
-
         const response = await axios({
             method: req.method,
             url: targetUrl,
             data: req.body,
-            headers: {
-                ...req.headers,
-                'x-client-ip': req.clientIp,
-                'x-forwarded-by': 'kiura-dmz-gateway',
-            }
+            headers: { ...req.headers, 'x-client-ip': req.clientIp, 'x-forwarded-by': 'kiura-node-dmz' }
         });
-
         res.status(response.status).json(response.data);
     } catch (error) {
-        console.error(`❌ Chat Proxy Error: ${error.message}`);
-        res.status(error.response?.status || 500).json({
-            error: "Chat Gateway Routing Error",
-            details: error.response?.data || error.message
-        });
+        res.status(error.response?.status || 500).json({ error: "Chat Gateway Routing Error" });
     }
 });
 
-// 5. 🔒 توجيه طلبات الفحص الأمني إلى security_server.py الداخلي
+// 5. 🔒 توجيه طلبات الحماية (Security)
 app.all('/api/security/*', async (req, res) => {
     try {
         const targetUrl = `${INTERNAL_SECURITY_SERVER}${req.originalUrl}`;
-        console.log(`🔒 Proxying Security request to: ${targetUrl}`);
-
         const response = await axios({
             method: req.method,
             url: targetUrl,
             data: req.body,
-            headers: {
-                ...req.headers,
-                'x-client-ip': req.clientIp,
-                'x-forwarded-by': 'kiura-dmz-gateway',
-            }
+            headers: { ...req.headers, 'x-client-ip': req.clientIp, 'x-forwarded-by': 'kiura-node-dmz' }
         });
-
         res.status(response.status).json(response.data);
     } catch (error) {
-        console.error(`❌ Security Proxy Error: ${error.message}`);
-        res.status(error.response?.status || 500).json({ 
-            error: "Security Gateway Routing Error",
-            details: error.response?.data || error.message
-        });
+        res.status(error.response?.status || 500).json({ error: "Security Gateway Routing Error" });
     }
 });
 
-// تشغيل البوابة على البورت المحدد
+// 6. 📁 توجيه طلبات الوسائط والملفات (Media)
+app.all('/api/media/*', async (req, res) => {
+    try {
+        const targetUrl = `${INTERNAL_MEDIA_SERVER}${req.originalUrl}`;
+        const response = await axios({
+            method: req.method,
+            url: targetUrl,
+            data: req.body,
+            headers: { ...req.headers, 'x-client-ip': req.clientIp, 'x-forwarded-by': 'kiura-node-dmz' }
+        });
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ error: "Media Gateway Routing Error" });
+    }
+});
+
+// 7. 📅 توجيه الطلبات والمهام اليومية (Daily Requests)
+app.all('/api/daily/*', async (req, res) => {
+    try {
+        const targetUrl = `${INTERNAL_DAILY_SERVER}${req.originalUrl}`;
+        const response = await axios({
+            method: req.method,
+            url: targetUrl,
+            data: req.body,
+            headers: { ...req.headers, 'x-client-ip': req.clientIp, 'x-forwarded-by': 'kiura-node-dmz' }
+        });
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ error: "Daily Gateway Routing Error" });
+    }
+});
+
+// تشغيل البوابة
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🛡️ Cserver.js (DMZ Secure Gateway) is active and running on port ${PORT}`);
+    console.log(`🛡️ Cserver.js (Node.js Comprehensive DMZ Gateway) is active on port ${PORT}`);
 });
