@@ -35,6 +35,15 @@ jobs:
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=kiura-release.jks\n' \
             "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
 
+      - name: Verify signing key (fails early with a clear message)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          ls -l android/app/kiura-release.jks
+          sha256sum android/app/kiura-release.jks
+          keytool -list -keystore android/app/kiura-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS"
+
       - run: flutter pub get
 
       # the build number (Android versionCode) grows with every run, so updates install over old versions
