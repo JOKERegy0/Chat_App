@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -19,6 +19,14 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _isLoading = false;
 
+  final AuthService _authService = AuthService();
+
+  void _showMessage(String text, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), backgroundColor: color),
+    );
+  }
+
   Future<void> _handleSubmit() async {
     setState(() => _isLoading = true);
     try {
@@ -27,77 +35,37 @@ class _SignupScreenState extends State<SignupScreen> {
       final identifier = _identifierController.text.trim();
 
       if (_isLoginMode) {
-        // --- وضع تسجيل الدخول ---
-        if (identifier.contains('@')) {
-          await Supabase.instance.client.auth.signInWithPassword(
-            email: identifier,
-            password: password,
+        // --- وضع تسجيل الدخول: الخادم يبحث عن الحساب المناسب ---
+        if (identifier.isEmpty || password.isEmpty) {
+          throw 'أدخل اسم المستخدم أو البريد وكلمة المرور.';
+        }
+        await _authService.signIn(identifier: identifier, password: password);
+      } else if (_selectedMethod == 'email') {
+        // --- إنشاء حساب ببريد حقيقي (يحتاج تأكيد البريد) ---
+        if (!identifier.contains('@')) {
+          throw 'يرجى إدخال بريد إلكتروني صحيح وصالح.';
+        }
+        final needsConfirmation = await _authService.signUpWithEmail(
+          email: identifier,
+          password: password,
+          username: username,
+        );
+        if (mounted) {
+          _showMessage(
+            needsConfirmation
+                ? 'تم إنشاء الحساب! افتح بريدك واضغط رابط التأكيد ثم سجّل الدخول.'
+                : 'تم إنشاء الحساب بنجاح! 🎉',
+            Colors.green,
           );
-        } else {
-          // البحث عن البريد الإلكتروني المرتبط باسم المستخدم في جدول profiles
-          final profileResponse = await Supabase.instance.client
-              .from('profiles')
-              .select('email')
-              .eq('username', identifier)
-              .maybeSingle();
-
-          if (profileResponse == null || profileResponse['email'] == null) {
-            throw 'اسم المستخدم غير مسجل لدينا!';
-          }
-
-          final email = profileResponse['email'];
-          await Supabase.instance.client.auth.signInWithPassword(
-            email: email,
-            password: password,
-          );
+          if (needsConfirmation) setState(() => _isLoginMode = true);
         }
       } else {
-        // --- وضع إنشاء حساب جديد ---
-        String emailToUse = '';
-        String usernameToUse = username;
-
-        if (_selectedMethod == 'email') {
-          emailToUse = identifier;
-          if (emailToUse.isEmpty || !emailToUse.contains('@')) {
-            throw 'يرجى إدخال بريد إلكتروني صحيح وصالح.';
-          }
-        } else if (_selectedMethod == 'username') {
-          if (username.isEmpty) {
-            throw 'يرجى إدخال اسم المستخدم.';
-          }
-          emailToUse = '${username.toLowerCase()}_kiura@kiura.app';
-          usernameToUse = username;
-        } else if (_selectedMethod == 'phone') {
-          if (identifier.isEmpty) {
-            throw 'يرجى إدخال رقم الهاتف.';
-          }
-          emailToUse = '${identifier.replaceAll(RegExp(r'[^0-9]'), '')}@kiura.phone';
-          usernameToUse = username.isEmpty ? identifier : username;
-        }
-
-        if (password.length < 6) {
-          throw 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
-        }
-
-        // إرسال البيانات مباشرة إلى سوبابيس
-        await Supabase.instance.client.auth.signUp(
-          email: emailToUse,
-          password: password,
-          data: {'username': usernameToUse.isEmpty ? emailToUse.split('@')[0] : usernameToUse},
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم إنشاء الحساب بنجاح! 🎉'), backgroundColor: Colors.green),
-          );
-        }
+        // --- إنشاء حساب باسم مستخدم فقط ---
+        await _authService.signUpWithUsername(username: username, password: password);
+        if (mounted) _showMessage('تم إنشاء الحساب بنجاح! 🎉', Colors.green);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
+      if (mounted) _showMessage('خطأ: $e', Colors.redAccent);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -227,6 +195,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               const SizedBox(height: 16),
                             ],
 
+                            if (_isLoginMode || _selectedMethod == 'email') ...[
                             _buildLiquidTextField(
                               controller: _identifierController,
                               label: _isLoginMode 
@@ -237,6 +206,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   : (_selectedMethod == 'email' ? Icons.email_outlined : (_selectedMethod == 'phone' ? Icons.phone_outlined : Icons.alternate_email_rounded)),
                             ),
                             const SizedBox(height: 16),
+                            ],
 
                             _buildLiquidTextField(
                               controller: _passwordController,
@@ -353,7 +323,13 @@ class _SignupScreenState extends State<SignupScreen> {
     bool isSelected = _selectedMethod == method;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedMethod = method),
+        onTap: () {
+          if (method == 'phone') {
+            _showMessage('التسجيل بالهاتف يحتاج خدمة رسائل SMS، وسيتم تفعيله لاحقًا.', Colors.orange);
+            return;
+          }
+          setState(() => _selectedMethod = method);
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
