@@ -1,185 +1,161 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// An error whose text can be shown to the user as is.
+class KiuraAuthError implements Exception {
+  final String message;
+  KiuraAuthError(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  static const String _functionName = 'kiura-auth';
+  static final RegExp _usernameRegex = RegExp(r'^[A-Za-z0-9_.-]{3,20}$');
 
-  // 1. التحقق من صيغة الـ Username
-  bool isValidUsernameFormat(String username) {
-    final regex = RegExp(r'^(?=.*[0-9_.])[a-zA-Z0-9_.]{3,20}$');
-    return regex.hasMatch(username);
-  }
+  SupabaseClient get _supabase => Supabase.instance.client;
 
-  // 2. التحقق مما إذا كان الـ Username محجوزاً مسبقاً
+  // ---------- username helpers (also used by the profile screen) ----------
+
+  bool isValidUsernameFormat(String username) => _usernameRegex.hasMatch(username);
+
   Future<bool> isUsernameTaken(String username) async {
     try {
-      final response = await _supabase
-          .from('users')
-          .select('id')
-      .eq('username', username)
-          .maybeSingle();
-
-      return response != null; // لو لقينا نتيجة يبقى الاسم محجوز
-    } catch (e) {
-      print('خطأ أثناء فحص اسم المستخدم: $e');
+      // "_" and "%" are wildcards in ILIKE, so they are escaped
+      final escaped = username.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
+      final rows = await _supabase
+          .from('profiles')
+          .select('username')
+          .ilike('username', escaped)
+          .limit(5);
+      final wanted = username.toLowerCase();
+      return rows.any((r) => (r['username'] as String?)?.toLowerCase() == wanted);
+    } catch (_) {
       return false;
     }
   }
 
-  // دالة مساعدة للتحقق من اسم المستخدم حسب القاعدة
-  Future<void> _validateUsernameIfNeeded(String? username, {required bool isMandatory}) async {
-    if (isMandatory || (username != null && username.isNotEmpty)) {
-      if (username == null || username.trim().isEmpty) {
-        throw 'اسم المستخدم إجباري لهذه الطريقة';
-      }
-      if (!isValidUsernameFormat(username)) {
-        throw 'صيغة اسم المستخدم غير صحيحة (يجب أن يحتوي على أرقام أو رموز مثل . أو _ وبطول من 3 لـ 20 خانة)';
-      }
-      bool taken = await isUsernameTaken(username);
-      if (taken) {
-        throw 'اسم المستخدم محجوز مسبقاً، اختر اسمآ آخر';
-      }
+  // ---------- calls to the kiura-auth edge function ----------
+
+  String _messageFor(String code) {
+    switch (code) {
+      case 'invalid_username':
+        return 'اسم المستخدم يجب أن يكون من 3 إلى 20 خانة (حروف إنجليزية وأرقام و . _ -).';
+      case 'weak_password':
+        return 'كلمة المرور يجب أن تكون من 6 إلى 72 خانة.';
+      case 'username_taken':
+        return 'اسم المستخدم محجوز مسبقًا، اختر اسمًا آخر.';
+      case 'invalid_credentials':
+        return 'اسم المستخدم أو كلمة المرور غير صحيحة.';
+      case 'email_not_confirmed':
+        return 'يرجى تأكيد بريدك الإلكتروني أولاً من الرسالة التي وصلتك.';
+      case 'rate_limited':
+        return 'محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.';
+      default:
+        return 'حدث خطأ غير متوقع، حاول مرة أخرى.';
     }
   }
 
-  // 3. التسجيل الأساسي (باسم المستخدم وكلمة المرور فقط بدون إيميل حقيقي)
-  Future<void> signUpWithUsernameOnly({
+  Future<Map<String, dynamic>> _callAuthFunction(Map<String, dynamic> body) async {
+    try {
+      final res = await _supabase.functions.invoke(_functionName, body: body);
+      final data = res.data;
+      if (data is Map<String, dynamic>) return data;
+      throw KiuraAuthError('رد غير متوقع من الخادم.');
+    } on FunctionException catch (e) {
+      final details = e.details;
+      final code = (details is Map && details['error'] is String)
+          ? details['error'] as String
+          : 'unknown';
+      throw KiuraAuthError(_messageFor(code));
+    } on KiuraAuthError {
+      rethrow;
+    } catch (_) {
+      throw KiuraAuthError('تعذّر الاتصال بالخادم، تأكد من الإنترنت وحاول مرة أخرى.');
+    }
+  }
+
+  /// Uses the session returned by the server. Returns false if there was none.
+  Future<bool> _applySession(Map<String, dynamic> data) async {
+    final session = data['session'];
+    if (session is Map && session['refresh_token'] is String) {
+      await _supabase.auth.setSession(session['refresh_token'] as String);
+      return true;
+    }
+    return false;
+  }
+
+  // ---------- public API ----------
+
+  /// Username-only account: created and signed in by the server, no email needed.
+  Future<void> signUpWithUsername({
     required String username,
     required String password,
   }) async {
-    try {
-      await _validateUsernameIfNeeded(username, isMandatory: true);
+    final name = username.trim();
+    if (!isValidUsernameFormat(name)) throw KiuraAuthError(_messageFor('invalid_username'));
+    if (password.length < 6) throw KiuraAuthError(_messageFor('weak_password'));
 
-      // توليد بريد إلكتروني داخلي وهمي ليتوافق مع قاعدة بيانات Supabase Auth
-      final String syntheticEmail = '${username.toLowerCase().trim()}@kiura.internal';
+    final data = await _callAuthFunction({
+      'action': 'signup_username',
+      'username': name,
+      'password': password,
+    });
 
-      final response = await _supabase.auth.signUp(
-        email: syntheticEmail,
-        password: password,
-        data: {
-          'username': username,
-        },
-      );
-
-      print('تم التسجيل باليوزرنيم بنجاح: ${response.user?.id}');
-    } catch (e) {
-      print('خطأ أثناء التسجيل باليوزرنيم: $e');
-      rethrow;
+    if (!await _applySession(data)) {
+      // account exists but the server did not return a session: sign in normally
+      await signIn(identifier: name, password: password);
     }
   }
 
-  // 4. التسجيل بالبريد الإلكتروني (اسم المستخدم إجباري)
-  Future<void> signUpWithEmail({
+  /// Real-email account: Supabase sends a confirmation email.
+  /// Returns true when the user still has to confirm the email before logging in.
+  Future<bool> signUpWithEmail({
     required String email,
     required String password,
     required String username,
   }) async {
-    try {
-      await _validateUsernameIfNeeded(username, isMandatory: true);
+    final name = username.trim();
+    if (!isValidUsernameFormat(name)) throw KiuraAuthError(_messageFor('invalid_username'));
+    if (password.length < 6) throw KiuraAuthError(_messageFor('weak_password'));
+    if (await isUsernameTaken(name)) throw KiuraAuthError(_messageFor('username_taken'));
 
+    try {
       final response = await _supabase.auth.signUp(
-        email: email,
+        email: email.trim(),
         password: password,
-        data: {
-          'username': username,
-        },
+        data: {'username': name},
       );
-
-      print('تم التسجيل بالبريد بنجاح: ${response.user?.id}');
-    } catch (e) {
-      print('خطأ أثناء التسجيل بالبريد: $e');
-      rethrow;
+      return response.session == null;
+    } on AuthException catch (e) {
+      throw KiuraAuthError(_mapAuthMessage(e));
     }
   }
 
-  // 5. التسجيل برقم الهاتف (اسم المستخدم اختياري)
-  Future<void> signUpWithPhone({
-    required String phone,
-    required String password,
-    String? username,
-  }) async {
-    try {
-      await _validateUsernameIfNeeded(username, isMandatory: false);
-
-      final response = await _supabase.auth.signUp(
-        phone: phone,
-        password: password,
-        data: username != null && username.isNotEmpty ? {'username': username} : {},
-      );
-
-      print('تم التسجيل بالهاتف بنجاح: ${response.user?.id}');
-    } catch (e) {
-      print('خطأ أثناء التسجيل بالهاتف: $e');
-      rethrow;
-    }
-  }
-
-  // 6. تسجيل الدخول الشامل باستخدام اسم المستخدم (يدعم اليوزرنيم، الإيميل، أو الهاتف المسجلين)
-  Future<AuthResponse> signInWithUsername({
-    required String username,
+  /// Login with a username or a real email. The server finds the right account.
+  Future<void> signIn({
+    required String identifier,
     required String password,
   }) async {
-    try {
-      // البحث عن بيانات المستخدم المرتبطة بهذا اليوزرنيم في جدول public.users
-      final userData = await _supabase
-          .from('users')
-          .select('email, phone')
-      .eq('username', username)
-          .maybeSingle();
+    final data = await _callAuthFunction({
+      'action': 'login',
+      'identifier': identifier.trim(),
+      'password': password,
+    });
 
-      if (userData == null) {
-        throw 'اسم المستخدم غير موجود';
-      }
-
-      final String? email = userData['email'];
-      final String? phone = userData['phone'];
-
-      // استخدام البريد (سواء حقيقي أو البريد الداخلي الوهمي للـ يوزرنيم) أو الهاتف لتسجيل الدخول
-      final response = await _supabase.auth.signInWithPassword(
-        email: email,
-        phone: phone,
-        password: password,
-      );
-
-      print('تم تسجيل الدخول بنجاح: ${response.user?.id}');
-      return response;
-    } catch (e) {
-      print('خطأ أثناء تسجيل الدخول: $e');
-      rethrow;
+    if (!await _applySession(data)) {
+      throw KiuraAuthError(_messageFor('unknown'));
     }
   }
 
-  // 7. تسجيل الدخول المباشر بالإيميل أو الهاتف التقليدي
-  Future<AuthResponse> signInDirect({
-    required String emailOrPhone,
-    required String password,
-  }) async {
-    try {
-      final isEmail = emailOrPhone.contains('@');
-      final response = await _supabase.auth.signInWithPassword(
-        email: isEmail ? emailOrPhone : null,
-        phone: !isEmail ? emailOrPhone : null,
-        password: password,
-      );
-
-      return response;
-    } catch (e) {
-      print('خطأ أثناء تسجيل الدخول المباشر: $e');
-      rethrow;
+  String _mapAuthMessage(AuthException e) {
+    final m = e.message.toLowerCase();
+    if (m.contains('rate limit')) {
+      return 'تم تجاوز عدد رسائل التأكيد المسموح. انتظر قليلاً ثم حاول مرة أخرى.';
     }
-  }
-
-  // 8. تسجيل الدخول عبر Facebook (OAuth)
-  Future<bool> signInWithFacebook() async {
-    try {
-      final bool response = await _supabase.auth.signInWithOAuth(
-        OAuthProvider.facebook,
-        redirectTo: 'io.supabase.kiura://login-callback/',
-      );
-
-      return response;
-    } catch (e) {
-      print('خطأ أثناء تسجيل الدخول بـ Facebook: $e');
-      rethrow;
-    }
+    if (m.contains('already')) return 'هذا البريد مسجل بالفعل.';
+    if (m.contains('password')) return 'كلمة المرور غير مقبولة (6 خانات على الأقل).';
+    if (m.contains('email') && m.contains('invalid')) return 'البريد الإلكتروني غير صالح.';
+    return 'تعذّر إنشاء الحساب: ${e.message}';
   }
 }
