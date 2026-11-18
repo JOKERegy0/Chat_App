@@ -11,6 +11,7 @@ class KiuraAuthError implements Exception {
 
 class AuthService {
   static const String _functionName = 'kiura-auth';
+  static const String _redirectUrl = 'io.supabase.kiura://login-callback/';
   static final RegExp _usernameRegex = RegExp(r'^[A-Za-z0-9_.-]{3,20}$');
 
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -134,6 +135,7 @@ class AuthService {
         email: cleanEmail,
         password: password,
         data: {'username': name},
+        emailRedirectTo: _redirectUrl,
       );
       return response.session == null;
     } on AuthException catch (e) {
