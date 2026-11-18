@@ -15,6 +15,10 @@ class AuthService {
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
+  /// Removes spaces and the invisible direction marks that Arabic keyboards can insert.
+  static String _clean(String s) =>
+      s.replaceAll(RegExp(r'[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
+
   // ---------- username helpers (also used by the profile screen) ----------
 
   bool isValidUsernameFormat(String username) => _usernameRegex.hasMatch(username);
@@ -92,7 +96,7 @@ class AuthService {
     required String username,
     required String password,
   }) async {
-    final name = username.trim();
+    final name = _clean(username);
     if (!isValidUsernameFormat(name)) throw KiuraAuthError(_messageFor('invalid_username'));
     if (password.length < 6) throw KiuraAuthError(_messageFor('weak_password'));
 
@@ -115,14 +119,19 @@ class AuthService {
     required String password,
     required String username,
   }) async {
-    final name = username.trim();
+    final name = _clean(username);
     if (!isValidUsernameFormat(name)) throw KiuraAuthError(_messageFor('invalid_username'));
     if (password.length < 6) throw KiuraAuthError(_messageFor('weak_password'));
     if (await isUsernameTaken(name)) throw KiuraAuthError(_messageFor('username_taken'));
 
+    final cleanEmail = _clean(email).toLowerCase();
+    if (!cleanEmail.contains('@')) {
+      throw KiuraAuthError('البريد الإلكتروني غير صالح.');
+    }
+
     try {
       final response = await _supabase.auth.signUp(
-        email: email.trim(),
+        email: cleanEmail,
         password: password,
         data: {'username': name},
       );
@@ -139,7 +148,7 @@ class AuthService {
   }) async {
     final data = await _callAuthFunction({
       'action': 'login',
-      'identifier': identifier.trim(),
+      'identifier': _clean(identifier),
       'password': password,
     });
 
@@ -155,7 +164,9 @@ class AuthService {
     }
     if (m.contains('already')) return 'هذا البريد مسجل بالفعل.';
     if (m.contains('password')) return 'كلمة المرور غير مقبولة (6 خانات على الأقل).';
-    if (m.contains('email') && m.contains('invalid')) return 'البريد الإلكتروني غير صالح.';
+    if (m.contains('email') && m.contains('invalid')) {
+      return 'البريد الإلكتروني غير مقبول من الخادم: ${e.message}';
+    }
     return 'تعذّر إنشاء الحساب: ${e.message}';
   }
 }
