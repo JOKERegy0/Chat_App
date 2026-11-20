@@ -2,102 +2,136 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
-// دالة مساعدة لجلب متغيرات البيئة أو القيم الافتراضية محلياً
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return fallback
+// ---------- rate limit: 120 requests per minute for every IP ----------
+
+const maxRequestsPerMinute = 120
+
+var (
+	hitsMu sync.Mutex
+	hits   = map[string]int{}
+)
+
+func allow(ip string) bool {
+	hitsMu.Lock()
+	defer hitsMu.Unlock()
+	hits[ip]++
+	return hits[ip] <= maxRequestsPerMinute
 }
 
-// دالة إنشاء الـ Reverse Proxy الموجه للسيرفرات الداخلية مع تمرير الآيبي
-func createProxy(target string) http.HandlerFunc {
-	targetUrl, _ := url.Parse(target)
-	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
+func resetHitsEvery(d time.Duration) {
+	for range time.Tick(d) {
+		hitsMu.Lock()
+		hits = map[string]int{}
+		hitsMu.Unlock()
+	}
+}
+
+// ---------- client IP: the address the Render proxy added (the last one) ----------
+// The first entries of X-Forwarded-For can be written by the client, so they are not trusted.
+
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[len(parts)-1])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// ---------- reverse proxy to an internal service ----------
+// fromPrefix is the public path on the gateway, toPrefix is the path on the internal service.
+
+func createProxy(target, fromPrefix, toPrefix, secret string) http.HandlerFunc {
+	targetURL, err := url.Parse(target)
+	if err != nil || target == "" {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Service not configured"}`))
+		}
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	defaultDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		defaultDirector(req)
+		req.URL.Path = toPrefix + strings.TrimPrefix(req.URL.Path, fromPrefix)
+		req.URL.RawPath = ""
+		req.Host = targetURL.Host
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte(`{"error":"Upstream unavailable"}`))
+	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		clientIP := r.Header.Get("X-Forwarded-For")
-		if clientIP == "" {
-			clientIP = r.RemoteAddr
+		ip := clientIP(r)
+		if !allow(ip) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"Too many requests"}`))
+			return
 		}
-		
-		log.Printf("⚡ [Go Proxy] Routing %s %s ➔ Target: %s", r.Method, r.URL.Path, target)
 
-		r.Header.Set("X-Client-Ip", clientIP)
-		r.Header.Set("X-Forwarded-By", "kiura-go-dmz-gateway")
-		r.Host = targetUrl.Host
-		
+		r.Header.Del("X-Forwarded-For")
+		r.Header.Del("X-Client-Ip")
+		r.Header.Set("X-Client-Ip", ip)
+		r.Header.Set("X-Forwarded-By", "kiura-go-gateway")
+		r.Header.Set("X-Service-Secret", secret)
+
 		proxy.ServeHTTP(w, r)
 	}
 }
 
 func main() {
-	port := getEnv("PORT", "8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
-	// 🌐 عناوين السيرفرات الداخلية (تأخذ من متغيرات البيئة أو الـ Fallback محلياً)
-	internalAuthServer     := getEnv("INTERNAL_AUTH_SERVER", "http://localhost:5001")
-	internalChatServer     := getEnv("INTERNAL_CHAT_SERVER", "http://localhost:5002")         // سيرفر المراسلة
-	internalSecurityServer := getEnv("INTERNAL_SECURITY_SERVER", "http://localhost:5003") // سيرفر الأمان
-	internalMediaServer    := getEnv("INTERNAL_MEDIA_SERVER", "http://localhost:5004")       // سيرفر الوسائط
-	internalDailyServer    := getEnv("INTERNAL_DAILY_SERVER", "http://localhost:5005")       // سيرفر الطلبات اليومية
+	// the shared secret must come from the environment, never from the code
+	internalServiceSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
+	if internalServiceSecret == "" {
+		log.Fatal("Missing INTERNAL_SERVICE_SECRET environment variable")
+	}
 
-	// 🔑 مفتاح الأمان الموحد والمتفق عليه
-	internalServiceSecret  := getEnv("INTERNAL_SERVICE_SECRET", "KIURA_INTERNAL_SERVICE_KEY_2026")
+	// internal service addresses (set them in the Render environment)
+	internalAuthServer := os.Getenv("INTERNAL_AUTH_SERVER")
+	internalSecurityServer := os.Getenv("INTERNAL_SECURITY_SERVER")
+	internalMediaServer := os.Getenv("INTERNAL_MEDIA_SERVER")
+	internalDailyServer := os.Getenv("INTERNAL_DAILY_SERVER")
 
-	// 1. 🚀 هاندشيك الإقلاع وفحص الأمان لـ Go Gateway
-	http.HandleFunc("/api/core/handshake", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	go resetHitsEvery(time.Minute)
 
-		securityKey := r.Header.Get("X-Security-Key")
-		if securityKey == "" {
-			securityKey = r.URL.Query().Get("securityKey")
-		}
+	mux := http.NewServeMux()
 
-		if securityKey != internalServiceSecret {
-			log.Printf("🚨 Unauthorized Go Handshake Attempt")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			w.Writer.Write([]byte(`{"status": "Rejected", "error": "Invalid Security Key in Go Gateway ❌"}`))
-			return
-		}
-
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Writer.Write([]byte(`{
-			"status": "Success",
-			"message": "Secure Go DMZ Handshake Passed ⚡",
-			"gateway": "main.go (Go High-Speed Gateway)",
-			"timestamp": "` + time.Now().Format(time.RFC3339) + `"
-		}`))
-	}))
+		w.Write([]byte(`{"status":"ONLINE","service":"kiura-gateway-go"}`))
+	})
 
-	// 2. 🔄 توجيه طلبات المصادقة (Auth)
-	http.HandleFunc("/api/auth/", createProxy(internalAuthServer))
+	// public path on the gateway  ->  path on the internal service
+	mux.HandleFunc("/api/auth/", createProxy(internalAuthServer, "/api/auth", "/api/v1/auth", internalServiceSecret))
+	mux.HandleFunc("/api/security/", createProxy(internalSecurityServer, "/api/security", "/api/v1/security", internalServiceSecret))
+	mux.HandleFunc("/api/media/", createProxy(internalMediaServer, "/api/media", "/api/v1/media", internalServiceSecret))
+	mux.HandleFunc("/api/daily/", createProxy(internalDailyServer, "/api/daily", "/api/requests", internalServiceSecret))
 
-	// 3. 💬 توجيه طلبات الشات والمراسلة (Chat)
-	http.HandleFunc("/api/chat/", createProxy(internalChatServer))
-
-	// 4. 🔒 توجيه طلبات الحماية والفحص (Security)
-	http.HandleFunc("/api/security/", createProxy(internalSecurityServer))
-
-	// 5. 📁 توجيه طلبات الوسائط والملفات (Media)
-	http.HandleFunc("/api/media/", createProxy(internalMediaServer))
-
-	// 6. 📅 توجيه الطلبات والمهام اليومية (Daily Requests)
-	http.HandleFunc("/api/daily/", createProxy(internalDailyServer))
-
-	log.Printf("🚀 main.go (Go High-Performance DMZ Gateway) is active and running on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("❌ Go Server Error: %v", err)
+	log.Printf("KIURA Go gateway is running on port %s", port)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatalf("Go server error: %v", err)
 	}
 }
