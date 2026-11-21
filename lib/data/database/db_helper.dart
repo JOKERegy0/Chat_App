@@ -63,4 +63,32 @@ class DatabaseHelper {
       whereArgs: [id],
     );
   }
+
+  /// Saves a received message only if we do not have it yet. Returns true when it was new.
+  Future<bool> insertIncomingIfNew(Map<String, dynamic> row) async {
+    final db = await instance.database;
+    final existing = await db.query(
+      'messages',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [row['id']],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) return false;
+    await db.insert('messages', row);
+    return true;
+  }
+
+  Future<String?> getChatIdForMessage(String id) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'messages',
+      columns: ['chat_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['chat_id'] as String?;
+  }
 }
