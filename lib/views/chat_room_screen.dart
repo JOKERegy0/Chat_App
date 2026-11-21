@@ -1,10 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/sync_service.dart';
+
 import '../data/database/db_helper.dart';
+import '../services/chat_service.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String chatId;
@@ -24,107 +24,80 @@ class ChatRoomScreen extends StatefulWidget {
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final List _messages = [];
-  WebSocketChannel? _channel;
+  final ScrollController _scrollController = ScrollController();
+  List<Map<String, dynamic>> _messages = [];
   late String _currentUserId;
   bool _isConnected = false;
+  StreamSubscription<String>? _changesSub;
+  StreamSubscription<bool>? _connectionSub;
 
   @override
   void initState() {
     super.initState();
     _currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    _initWebSocketAndSync();
-    _loadLocalMessages();
+
+    // the connection lives in ChatService; this screen only listens to it
+    final chat = ChatService.instance;
+    chat.activeChatId = widget.chatId;
+    chat.start();
+    _isConnected = chat.isConnected;
+
+    _changesSub = chat.changes.listen((chatId) {
+      if (chatId == widget.chatId || chatId == '*') _loadMessages();
+    });
+    _connectionSub = chat.connectionState.listen((connected) {
+      if (mounted) setState(() => _isConnected = connected);
+    });
+
+    _loadMessages();
   }
 
-  void _initWebSocketAndSync() {
-    final session = Supabase.instance.client.auth.currentSession;
-    final accessToken = session?.accessToken ?? '';
-    const String appVersion = '1.0.0+1';
-
-    final uri = Uri.parse(
-      'wss://chat-app-4hax.onrender.com?user_id=$_currentUserId&version=$appVersion&token=$accessToken',
-    );
-
-    try {
-      _channel = WebSocketChannel.connect(uri);
-      setState(() {
-        _isConnected = true;
-      });
-
-      SyncService.instance.syncPendingMessages(_channel);
-
-      _channel!.stream.listen(
-        (data) {
-          final decoded = jsonDecode(data);
-          if (decoded['type'] != 'ack') {
-            setState(() {
-              _messages.add(decoded);
-            });
-          }
-        },
-        onError: (error) {
-          setState(() {
-            _isConnected = false;
-          });
-        },
-        onDone: () {
-          setState(() {
-            _isConnected = false;
-          });
-        },
-      );
-    } catch (e) {
-      setState(() {
-        _isConnected = false;
-      });
-    }
-  }
-
-  Future<void> _loadLocalMessages() async {
-    final localMsgs = await DatabaseHelper.instance.getMessagesForChat(widget.chatId);
+  Future<void> _loadMessages() async {
+    final rows = await DatabaseHelper.instance.getMessagesForChat(widget.chatId);
+    if (!mounted) return;
     setState(() {
-      _messages.clear();
-      _messages.addAll(localMsgs);
+      _messages = rows.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+    });
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
     });
   }
 
-  void _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-
-    final messageContent = _messageController.text.trim();
-    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
     _messageController.clear();
 
-    final newMessage = {
-      'id': messageId,
-      'chat_id': widget.chatId,
-      'sender_id': _currentUserId,
-      'recipient_id': widget.recipientId,
-      'content': messageContent,
-      'type': 'text',
-      'status': 'pending',
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-
-    setState(() {
-      _messages.add(newMessage);
-    });
-
-    await SyncService.instance.handleOutgoingMessage(
-      id: messageId,
+    await ChatService.instance.sendMessage(
       chatId: widget.chatId,
-      senderId: _currentUserId,
       recipientId: widget.recipientId,
-      content: messageContent,
-      channel: _isConnected ? _channel : null,
+      content: text,
     );
+    await _loadMessages();
+  }
+
+  String _formatTime(dynamic timestamp) {
+    final parsed = DateTime.tryParse(timestamp?.toString() ?? '');
+    if (parsed == null) return '';
+    final t = parsed.toLocal();
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   void dispose() {
-    _channel?.sink.close();
+    if (ChatService.instance.activeChatId == widget.chatId) {
+      ChatService.instance.activeChatId = null;
+    }
+    _changesSub?.cancel();
+    _connectionSub?.cancel();
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -152,11 +125,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         children: [
           Expanded(
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final isMe = msg['sender_id'] == _currentUserId;
+                final delivered = msg['status'] == 'sent';
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -179,17 +154,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              msg['timestamp'] != null
-                                  ? msg['timestamp'].toString().substring(11, 16)
-                                  : '',
+                              _formatTime(msg['timestamp']),
                               style: const TextStyle(color: Colors.white54, fontSize: 10),
                             ),
                             if (isMe) ...[
                               const SizedBox(width: 4),
                               Icon(
-                                msg['status'] == 'sent' ? Icons.done_all : Icons.done,
+                                delivered ? Icons.done_all : Icons.access_time,
                                 size: 12,
-                                color: msg['status'] == 'sent' ? Colors.lightBlueAccent : Colors.grey,
+                                color: delivered ? Colors.lightBlueAccent : Colors.grey,
                               ),
                             ]
                           ],
