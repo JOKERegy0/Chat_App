@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/core_api_service.dart';
+import '../services/chat_service.dart';
 import 'chat_room_screen.dart';
 import 'profile_screen.dart';
 import 'statuses_screen.dart'; // شاشة الحالات الموجودة لديك
@@ -17,57 +19,110 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   bool _isLoading = false;
   String _errorMessage = '';
   final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  int _searchSeq = 0;
+  StreamSubscription<Map<String, dynamic>>? _incomingSub;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchQueryChanged);
+    _searchController.addListener(_onSearchTextChanged);
+
+    // one connection for the whole app, started as soon as the user is logged in
+    ChatService.instance.start();
+    _incomingSub = ChatService.instance.incomingMessages.listen(_onIncomingMessage);
   }
 
-  // 🔍 البحث الذكي عبر السيرفر المركزي
-  Future<void> _onSearchQueryChanged() async {
-    final query = _searchController.text.trim();
-    
-    if (query.isEmpty) {
+  void _openChat(String userId, String username) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatRoomScreen(
+          chatId: 'chat_$userId',
+          recipientId: userId,
+          recipientName: username,
+        ),
+      ),
+    );
+  }
+
+  // a message arrived while this screen is on top: tell the user who sent it
+  Future<void> _onIncomingMessage(Map<String, dynamic> msg) async {
+    if (msg['chat_id'] == ChatService.instance.activeChatId) return;
+    final senderId = (msg['sender_id'] as String?) ?? '';
+    if (senderId.isEmpty) return;
+
+    final name = await ChatService.instance.lookupUsername(senderId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('رسالة جديدة من $name'),
+          action: SnackBarAction(label: 'فتح', onPressed: () => _openChat(senderId, name)),
+        ),
+      );
+  }
+
+  void _onSearchTextChanged() {
+    _debounce?.cancel();
+    if (_searchController.text.trim().isEmpty) {
       setState(() {
         _searchResults = [];
         _isLoading = false;
+        _errorMessage = '';
       });
       return;
     }
+    setState(() => _isLoading = true);
+    _debounce = Timer(const Duration(milliseconds: 350), _runSearch);
+  }
 
+  // 🔍 البحث عن المستخدمين بالاسم (أسماء تبدأ بما كتبته)
+  Future<void> _runSearch() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+
+    final seq = ++_searchSeq;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
 
     try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      final currentUsername = currentUser?.userMetadata?['username'] ?? '';
+      final client = Supabase.instance.client;
+      final myId = client.auth.currentUser?.id;
+      // "_" and "%" are wildcards in ILIKE, so they are escaped
+      final escaped = query.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
 
-      final results = await CoreApiService.searchUsers(
-        searchQuery: query,
-        currentUsername: currentUsername,
-      );
+      final base = client.from('profiles').select('id, username').ilike('username', '$escaped%');
+      final results = await (myId == null ? base : base.neq('id', myId)).limit(20);
 
+      if (!mounted || seq != _searchSeq) return;
       setState(() {
         _searchResults = results;
       });
     } catch (e) {
+      if (!mounted || seq != _searchSeq) return;
       setState(() {
-        _errorMessage = 'خطأ في الاتصال بنظام البحث: $e';
+        _errorMessage = 'تعذّر البحث، تأكد من الإنترنت وحاول مرة أخرى.';
       });
-      print('Search Error: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted && seq == _searchSeq) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _incomingSub?.cancel();
     _searchController.dispose();
+    // this screen only exists while logged in, so closing it means logging out
+    ChatService.instance.stop();
     super.dispose();
   }
 
@@ -233,16 +288,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                       );
                                       return;
                                     }
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => ChatRoomScreen(
-                                          chatId: 'chat_$userId',
-                                          recipientId: userId,
-                                          recipientName: username,
-                                        ),
-                                      ),
-                                    );
+                                    _openChat(userId, username);
                                   },
                                 ),
                               );
