@@ -17,7 +17,8 @@ const RATE_LIMIT_WINDOW_MS = 10000; // per 10 seconds
 
 // ---------- version check (minimum version, not exact match) ----------
 function parseVersion(v) {
-  const m = /^(\d+)\.(\d+)\.(\d+)(?:\+(\d+))?$/.exec(String(v || ''));
+  // a raw "+" in a URL query arrives as a space, so accept both
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:\+(\d+))?$/.exec(String(v || '').trim().replace(' ', '+'));
   if (!m) return null;
   return [m[1], m[2], m[3], m[4] || 0].map(Number);
 }
