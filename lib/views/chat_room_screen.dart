@@ -131,7 +131,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final isMe = msg['sender_id'] == _currentUserId;
-                final delivered = msg['status'] == 'sent';
+                final status = msg['status'];
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -160,9 +160,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             if (isMe) ...[
                               const SizedBox(width: 4),
                               Icon(
-                                delivered ? Icons.done_all : Icons.access_time,
+                                status == 'sent'
+                                    ? Icons.done_all
+                                    : status == 'queued'
+                                        ? Icons.done
+                                        : status == 'failed'
+                                            ? Icons.error_outline
+                                            : Icons.access_time,
                                 size: 12,
-                                color: delivered ? Colors.lightBlueAccent : Colors.grey,
+                                color: status == 'sent'
+                                    ? Colors.lightBlueAccent
+                                    : status == 'failed'
+                                        ? Colors.redAccent
+                                        : Colors.grey,
                               ),
                             ]
                           ],
