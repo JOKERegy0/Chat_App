@@ -91,4 +91,23 @@ class DatabaseHelper {
     if (rows.isEmpty) return null;
     return rows.first['chat_id'] as String?;
   }
+
+  /// Moves a message status forward only: pending -> queued -> sent (or failed).
+  /// A late "queued" confirmation can never undo a "sent" one.
+  Future<void> advanceMessageStatus(String id, String status) async {
+    final db = await instance.database;
+    final allowedFrom = {
+      'queued': ['pending'],
+      'sent': ['pending', 'queued'],
+      'failed': ['pending', 'queued'],
+    }[status];
+    if (allowedFrom == null) return;
+    final marks = List.filled(allowedFrom.length, '?').join(',');
+    await db.update(
+      'messages',
+      {'status': status},
+      where: 'id = ? AND status IN ($marks)',
+      whereArgs: [id, ...allowedFrom],
+    );
+  }
 }
