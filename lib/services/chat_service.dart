@@ -153,6 +153,13 @@ class ChatService {
     if (code == 4001 || code == 4003) _forceRefresh = true;
     _closeChannel();
     _setConnected(false);
+
+    if (code == 4009) {
+      // the same account connected from another phone: do not fight for the connection
+      _reconnectTimer?.cancel();
+      _reconnectTimer = Timer(const Duration(seconds: 60), _connect);
+      return;
+    }
     _scheduleReconnect();
   }
 
@@ -167,19 +174,17 @@ class ChatService {
   // ---------- receiving ----------
 
   Future<void> _onData(dynamic raw) async {
-    Map<String, dynamic> msg;
     try {
       final decoded = jsonDecode(raw as String);
       if (decoded is! Map<String, dynamic>) return;
-      msg = decoded;
-    } catch (_) {
-      return;
-    }
 
-    if (msg['type'] == 'ack') {
-      await _handleAck(msg);
-    } else if (msg['content'] is String && msg['sender_id'] is String) {
-      await _handleIncoming(msg);
+      if (decoded['type'] == 'ack') {
+        await _handleAck(decoded);
+      } else if (decoded['content'] is String && decoded['sender_id'] is String) {
+        await _handleIncoming(decoded);
+      }
+    } catch (_) {
+      // a bad message or a database error must never crash the connection
     }
   }
 
@@ -187,13 +192,20 @@ class ChatService {
     final id = msg['message_id']?.toString();
     if (id == null) return;
 
-    // "sent" = the other user's phone received it.
-    // "pending" = the other user is offline: the message stays pending and is retried.
-    if (msg['status'] == 'sent') {
-      await DatabaseHelper.instance.updateMessageStatus(id, 'sent');
-      final chatId = await DatabaseHelper.instance.getChatIdForMessage(id);
-      _changesController.add(chatId ?? '*');
+    // queued   = the server has the message (one tick)
+    // sent     = the other phone confirmed it is saved there (two ticks)
+    // rejected = the server refused it (unknown user, too long, ...)
+    final status = msg['status'];
+    if (status == 'queued' || status == 'sent') {
+      await DatabaseHelper.instance.advanceMessageStatus(id, status as String);
+    } else if (status == 'rejected') {
+      await DatabaseHelper.instance.advanceMessageStatus(id, 'failed');
+    } else {
+      return;
     }
+
+    final chatId = await DatabaseHelper.instance.getChatIdForMessage(id);
+    _changesController.add(chatId ?? '*');
   }
 
   Future<void> _handleIncoming(Map<String, dynamic> msg) async {
@@ -214,13 +226,24 @@ class ChatService {
     };
 
     final isNew = await DatabaseHelper.instance.insertIncomingIfNew(row);
-    if (!isNew) return; // a resend of a message we already have
+
+    // tell the server the message is saved here (also for a repeat of a message we already have)
+    _sendReceipt(id);
+    if (!isNew) return;
 
     _changesController.add(row['chat_id'] as String);
     _incomingController.add(row);
   }
 
   // ---------- sending ----------
+
+  void _sendReceipt(String messageId) {
+    final channel = _channel;
+    if (!_connected || channel == null) return;
+    try {
+      channel.sink.add(jsonEncode({'type': 'receipt', 'message_id': messageId}));
+    } catch (_) {}
+  }
 
   String _newMessageId(String userId) {
     final short = userId.length >= 8 ? userId.substring(0, 8) : userId;
