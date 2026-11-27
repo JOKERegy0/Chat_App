@@ -53,12 +53,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _loadMessages() async {
-    final rows = await DatabaseHelper.instance.getMessagesForChat(widget.chatId);
+    final rows = await DatabaseHelper.instance.getMessagesForChat(widget.chatId, userId: _currentUserId);
     if (!mounted) return;
     setState(() {
       _messages = rows.map((r) => Map<String, dynamic>.from(r as Map)).toList();
     });
     _scrollToBottom();
+    // the chat is open, so what we received in it is read
+    await DatabaseHelper.instance.markChatRead(widget.chatId, _currentUserId);
   }
 
   void _scrollToBottom() {
