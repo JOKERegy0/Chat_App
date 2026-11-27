@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/database/db_helper.dart';
 import '../services/chat_service.dart';
 import 'chat_room_screen.dart';
 import 'profile_screen.dart';
@@ -22,6 +23,13 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   Timer? _debounce;
   int _searchSeq = 0;
   StreamSubscription<Map<String, dynamic>>? _incomingSub;
+  StreamSubscription<String>? _changesSub;
+  Timer? _refreshTimer;
+
+  // the conversations saved on this phone (shown when the search box is empty)
+  List<Map<String, dynamic>> _conversations = [];
+  final Map<String, String> _peerNames = {};
+  bool _loadingConversations = true;
 
   @override
   void initState() {
@@ -31,6 +39,56 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     // one connection for the whole app, started as soon as the user is logged in
     ChatService.instance.start();
     _incomingSub = ChatService.instance.incomingMessages.listen(_onIncomingMessage);
+
+    _loadConversations();
+    _changesSub = ChatService.instance.changes.listen((_) => _scheduleRefresh());
+  }
+
+  String _peerIdOf(String chatId) => chatId.startsWith('chat_') ? chatId.substring(5) : '';
+
+  // many events can arrive together (a batch of queued messages): refresh once
+  void _scheduleRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(const Duration(milliseconds: 250), _loadConversations);
+  }
+
+  Future<void> _loadConversations() async {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    if (myId == null) return;
+
+    final rows = await DatabaseHelper.instance.getConversations(myId);
+    final list = rows.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+
+    // names of the people we talk to (looked up once, then remembered)
+    final missing = list
+        .map((c) => _peerIdOf(c['chat_id'] as String))
+        .where((id) => id.isNotEmpty && !_peerNames.containsKey(id))
+        .toSet()
+        .toList();
+    if (missing.isNotEmpty) {
+      final names = await Future.wait(missing.map(ChatService.instance.lookupUsername));
+      for (var i = 0; i < missing.length; i++) {
+        // the fallback name (offline) is not remembered, so it is looked up again next time
+        if (names[i] != 'مستخدم KIURA') _peerNames[missing[i]] = names[i];
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _conversations = list;
+      _loadingConversations = false;
+    });
+  }
+
+  String _formatChatTime(dynamic timestamp) {
+    final parsed = DateTime.tryParse(timestamp?.toString() ?? '');
+    if (parsed == null) return '';
+    final t = parsed.toLocal();
+    final now = DateTime.now();
+    if (t.year == now.year && t.month == now.month && t.day == now.day) {
+      return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    }
+    return '${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')}';
   }
 
   void _openChat(String userId, String username) {
@@ -43,7 +101,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           recipientName: username,
         ),
       ),
-    );
+    ).then((_) => _loadConversations());
   }
 
   // a message arrived while this screen is on top: tell the user who sent it
@@ -120,10 +178,105 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   void dispose() {
     _debounce?.cancel();
     _incomingSub?.cancel();
+    _changesSub?.cancel();
+    _refreshTimer?.cancel();
     _searchController.dispose();
     // this screen only exists while logged in, so closing it means logging out
     ChatService.instance.stop();
     super.dispose();
+  }
+
+  Widget _buildConversationsList() {
+    if (_loadingConversations) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)));
+    }
+    if (_conversations.isEmpty) {
+      return const Center(
+        child: Text(
+          '🔒 اكتب اسم المستخدم في الأعلى للبحث والبدء بمراسلة آمنة',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white54, fontSize: 14),
+        ),
+      );
+    }
+
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    return ListView.builder(
+      itemCount: _conversations.length,
+      itemBuilder: (context, index) {
+        final chat = _conversations[index];
+        final peerId = _peerIdOf(chat['chat_id'] as String);
+        final name = _peerNames[peerId] ?? 'مستخدم KIURA';
+        final unread = (chat['unread'] as int?) ?? 0;
+        final isMine = chat['sender_id'] == myId;
+        final preview = (chat['content'] as String?) ?? '';
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            leading: CircleAvatar(
+              radius: 24,
+              backgroundColor: const Color(0xFF3B82F6),
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            title: Text(
+              name,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                isMine ? 'أنت: $preview' : preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: unread > 0 ? Colors.white : Colors.white54,
+                  fontSize: 13,
+                  fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            trailing: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _formatChatTime(chat['timestamp']),
+                  style: TextStyle(
+                    color: unread > 0 ? const Color(0xFF3B82F6) : Colors.white38,
+                    fontSize: 11,
+                  ),
+                ),
+                if (unread > 0) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            onTap: peerId.isEmpty ? null : () => _openChat(peerId, name),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -223,13 +376,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
                 : _searchController.text.trim().isEmpty
-                    ? const Center(
-                        child: Text(
-                          '🔒 اكتب اسم المستخدم في الأعلى للبحث والبدء بمراسلة آمنة',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white54, fontSize: 14),
-                        ),
-                      )
+                    ? _buildConversationsList()
                     : _searchResults.isEmpty
                         ? const Center(
                             child: Text(
