@@ -16,7 +16,7 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(path, version: 2, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -29,9 +29,17 @@ class DatabaseHelper {
         content TEXT,
         type TEXT,
         status TEXT,
-        timestamp TEXT
+        timestamp TEXT,
+        is_read INTEGER NOT NULL DEFAULT 1
       )
     ''');
+  }
+
+  // version 2: unread marker. Messages that already exist count as read.
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 1');
+    }
   }
 
   Future<int> insertMessage(Map<String, dynamic> row) async {
@@ -44,13 +52,43 @@ class DatabaseHelper {
     return await db.query('messages', where: 'status = ?', whereArgs: ['pending']);
   }
 
-  Future<List> getMessagesForChat(String chatId) async {
+  Future<List> getMessagesForChat(String chatId, {String? userId}) async {
     final db = await instance.database;
     return await db.query(
       'messages',
-      where: 'chat_id = ?',
-      whereArgs: [chatId],
+      where: userId == null ? 'chat_id = ?' : 'chat_id = ? AND (sender_id = ? OR recipient_id = ?)',
+      whereArgs: userId == null ? [chatId] : [chatId, userId, userId],
       orderBy: 'timestamp ASC',
+    );
+  }
+
+  /// One row per conversation of this user: last message, its time, and the unread count.
+  Future<List> getConversations(String userId) async {
+    final db = await instance.database;
+    return await db.rawQuery('''
+      SELECT m.chat_id AS chat_id, m.content AS content, m.timestamp AS timestamp,
+             m.sender_id AS sender_id, m.status AS status,
+             (SELECT COUNT(*) FROM messages u
+                WHERE u.chat_id = m.chat_id AND u.recipient_id = ? AND u.is_read = 0) AS unread
+      FROM messages m
+      WHERE m.id = (
+        SELECT x.id FROM messages x
+        WHERE x.chat_id = m.chat_id AND (x.sender_id = ? OR x.recipient_id = ?)
+        ORDER BY x.timestamp DESC, x.rowid DESC
+        LIMIT 1
+      )
+      ORDER BY m.timestamp DESC
+    ''', [userId, userId, userId]);
+  }
+
+  /// The user opened the chat: everything received in it counts as read.
+  Future<void> markChatRead(String chatId, String userId) async {
+    final db = await instance.database;
+    await db.update(
+      'messages',
+      {'is_read': 1},
+      where: 'chat_id = ? AND recipient_id = ? AND is_read = 0',
+      whereArgs: [chatId, userId],
     );
   }
 
