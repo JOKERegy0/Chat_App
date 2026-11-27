@@ -223,6 +223,8 @@ class ChatService {
       'type': 'text',
       'status': 'received',
       'timestamp': msg['timestamp']?.toString() ?? DateTime.now().toUtc().toIso8601String(),
+      // unread, unless that chat is open on screen right now
+      'is_read': activeChatId == 'chat_$senderId' ? 1 : 0,
     };
 
     final isNew = await DatabaseHelper.instance.insertIncomingIfNew(row);
