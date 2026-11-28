@@ -30,6 +30,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   List<Map<String, dynamic>> _conversations = [];
   final Map<String, String> _peerNames = {};
   bool _loadingConversations = true;
+  bool _fetchingNames = false;
+  Timer? _snackTimer;
 
   @override
   void initState() {
@@ -59,18 +61,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     final rows = await DatabaseHelper.instance.getConversations(myId);
     final list = rows.map((r) => Map<String, dynamic>.from(r as Map)).toList();
 
-    // names of the people we talk to (looked up once, then remembered)
-    final missing = list
-        .map((c) => _peerIdOf(c['chat_id'] as String))
-        .where((id) => id.isNotEmpty && !_peerNames.containsKey(id))
-        .toSet()
-        .toList();
-    if (missing.isNotEmpty) {
-      final names = await Future.wait(missing.map(ChatService.instance.lookupUsername));
-      for (var i = 0; i < missing.length; i++) {
-        // the fallback name (offline) is not remembered, so it is looked up again next time
-        if (names[i] != 'مستخدم KIURA') _peerNames[missing[i]] = names[i];
-      }
+    // names remembered on this phone: the list can show up at once, even offline
+    if (_peerNames.isEmpty) {
+      _peerNames.addAll(await DatabaseHelper.instance.getPeerNames());
     }
 
     if (!mounted) return;
@@ -78,6 +71,33 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       _conversations = list;
       _loadingConversations = false;
     });
+
+    _fetchMissingNames(list); // in the background, the list does not wait for it
+  }
+
+  Future<void> _fetchMissingNames(List<Map<String, dynamic>> list) async {
+    if (_fetchingNames) return;
+    final missing = list
+        .map((c) => _peerIdOf(c['chat_id'] as String))
+        .where((id) => id.isNotEmpty && !_peerNames.containsKey(id))
+        .toSet()
+        .toList();
+    if (missing.isEmpty) return;
+
+    _fetchingNames = true;
+    try {
+      final names = await Future.wait(missing.map(ChatService.instance.lookupUsername));
+      var changed = false;
+      for (var i = 0; i < missing.length; i++) {
+        if (names[i] == 'مستخدم KIURA') continue; // offline: try again next time
+        _peerNames[missing[i]] = names[i];
+        await DatabaseHelper.instance.savePeerName(missing[i], names[i]);
+        changed = true;
+      }
+      if (changed && mounted) setState(() {});
+    } finally {
+      _fetchingNames = false;
+    }
   }
 
   String _formatChatTime(dynamic timestamp) {
@@ -92,6 +112,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   void _openChat(String userId, String username) {
+    _snackTimer?.cancel();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -120,6 +142,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           action: SnackBarAction(label: 'فتح', onPressed: () => _openChat(senderId, name)),
         ),
       );
+
+    _snackTimer?.cancel();
+    _snackTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    });
   }
 
   void _onSearchTextChanged() {
@@ -180,6 +207,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     _incomingSub?.cancel();
     _changesSub?.cancel();
     _refreshTimer?.cancel();
+    _snackTimer?.cancel();
     _searchController.dispose();
     // this screen only exists while logged in, so closing it means logging out
     ChatService.instance.stop();
