@@ -16,7 +16,7 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 2, onCreate: _createDB, onUpgrade: _upgradeDB);
+    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -33,12 +33,17 @@ class DatabaseHelper {
         is_read INTEGER NOT NULL DEFAULT 1
       )
     ''');
+    await db.execute('CREATE TABLE peers (id TEXT PRIMARY KEY, name TEXT NOT NULL)');
   }
 
   // version 2: unread marker. Messages that already exist count as read.
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 1');
+    }
+    // version 3: names of the people we talk to, so the chat list needs no internet
+    if (oldVersion < 3) {
+      await db.execute('CREATE TABLE IF NOT EXISTS peers (id TEXT PRIMARY KEY, name TEXT NOT NULL)');
     }
   }
 
@@ -79,6 +84,22 @@ class DatabaseHelper {
       )
       ORDER BY m.timestamp DESC
     ''', [userId, userId, userId]);
+  }
+
+  /// Names of the people we talk to, remembered on this phone.
+  Future<Map<String, String>> getPeerNames() async {
+    final db = await instance.database;
+    final rows = await db.query('peers');
+    return {for (final r in rows) r['id'] as String: r['name'] as String};
+  }
+
+  Future<void> savePeerName(String id, String name) async {
+    final db = await instance.database;
+    await db.insert(
+      'peers',
+      {'id': id, 'name': name},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   /// The user opened the chat: everything received in it counts as read.
