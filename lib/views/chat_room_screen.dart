@@ -107,18 +107,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(widget.recipientName, style: const TextStyle(color: Colors.white)),
-            const SizedBox(width: 8),
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _isConnected ? Colors.green : Colors.red,
+            // shown only while OUR connection is down (messages wait and are sent later)
+            if (!_isConnected)
+              const Text(
+                'جارٍ الاتصال…',
+                style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
               ),
-            ),
           ],
         ),
         backgroundColor: const Color(0xFF0F172A),
